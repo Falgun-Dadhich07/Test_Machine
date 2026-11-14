@@ -1,2425 +1,1105 @@
 "use client";
-import React, { useState,useEffect, useRef } from "react";
-import Typography from "@mui/joy/Typography";
-import Tabs from "@mui/joy/Tabs";
-import TabList from "@mui/joy/TabList";
-import Tab, { tabClasses } from "@mui/joy/Tab";
-import TabPanel from "@mui/joy/TabPanel";
-import Radio from "@mui/joy/Radio";
-import RadioGroup from "@mui/joy/RadioGroup";
-import ListItemDecorator from "@mui/joy/ListItemDecorator";
-import Sheet from "@mui/joy/Sheet";
-import Grid from "@mui/joy/Grid";
-import Button from "@mui/joy/Button";
-import Modal from "@mui/joy/Modal";
-import ModalDialog from "@mui/joy/ModalDialog";
-import DialogTitle from "@mui/joy/DialogTitle";
-import DialogContent from "@mui/joy/DialogContent";
-import Divider from "@mui/joy/Divider";
-import DialogActions from "@mui/joy/DialogActions";
-import WarningRoundedIcon from "@mui/icons-material/WarningRounded";
-import Stack from "@mui/joy/Stack";
-import Box from "@mui/joy/Box";
-import CustomWebcam from "../../components/CustomWebcam";
-import Test from "../../test.json";
-import { Card, Chip } from "@mui/joy";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/router";
+import {
+  Typography,
+  Tabs,
+  TabList,
+  Tab,
+  tabClasses,
+  Radio,
+  Sheet,
+  Grid,
+  Button,
+  Modal,
+  ModalDialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
+  Stack,
+  Box,
+  Card,
+  Chip,
+  Alert,
+  CircularProgress,
+  Input,
+  Checkbox,
+} from "@mui/joy";
+import {
+  WarningRounded,
+  NavigateNext,
+  NavigateBefore,
+  BookmarkBorder,
+  Bookmark,
+  Fullscreen,
+  CheckCircle,
+  Security,
+  Numbers,
+  ListAlt,
+  Layers,
+  Lock,
+} from "@mui/icons-material";
+import CustomWebcam from "../../components/CustomWebcam";
 import UserInfo from "../../components/info";
 import { useAuth } from "../../contexts/AuthContext";
-import { questionsData } from "../../data/questions";
-import NavigateNextIcon from "@mui/icons-material/NavigateNext";
-import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import { useFullscreenProctor } from "../../hooks/useFullscreenProctor";
 import { db } from "../../firebase-config";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-export default function Home() {
-	const [open, setOpen] = React.useState(false);
-	const camera = useRef(null);
-	const [image, setImage] = useState(null);
-	const [layout, setLayout] = React.useState(undefined);
-
-	const router = useRouter();
-	const { subject } = router.query;
-	const { currentUser } = useAuth();
-	const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-	const [answers, setAnswers] = useState({});
-	const [markedForReview, setMarkedForReview] = useState({});
-	const [timeLeft, setTimeLeft] = useState(30 * 60); // 30 minutes
-	const [isSubmitted, setIsSubmitted] = useState(false);
-	const [questions, setQuestions] = useState([]);
-
-	useEffect(() => {
-		if (!currentUser) {
-			router.push("/login");
-			return;
-		}
-
-		if (subject && questionsData[subject]) {
-			setQuestions(questionsData[subject]);
-		}
-	}, [currentUser, subject]);
-
-	useEffect(() => {
-		if (timeLeft > 0 && !isSubmitted) {
-			const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-			return () => clearTimeout(timer);
-		} else if (timeLeft === 0 && !isSubmitted) {
-			handleSubmit();
-		}
-	}, [timeLeft, isSubmitted]);
-
-	const handleAnswerSelect = (questionId, answerIndex) => {
-		setAnswers((prev) => ({
-			...prev,
-			[questionId]: answerIndex,
-		}));
-	};
-
-	const handleSubmit = async () => {
-		if (isSubmitted) return;
-
-		let score = 0;
-		questions.forEach((question) => {
-			if (answers[question.id] === question.correctAnswer) {
-				score++;
-			}
-		});
-
-		try {
-			await addDoc(collection(db, "testResults"), {
-				userId: currentUser.uid,
-				userEmail: currentUser.email,
-				subject: subject,
-				score: score,
-				totalQuestions: questions.length,
-				answers: answers,
-				timestamp: serverTimestamp(),
-			});
-
-			setIsSubmitted(true);
-
-			setTimeout(() => {
-				router.push("/dashboard");
-			}, 5000);
-		} catch (error) {
-			console.error("Error saving test result:", error);
-		}
-	};
-
-	const formatTime = (seconds) => {
-		const mins = Math.floor(seconds / 60);
-		const secs = seconds % 60;
-		return `${mins}:${secs.toString().padStart(2, "0")}`;
-	};
-
-	if (!currentUser || !questions.length) {
-		return <div>Loading...</div>;
-	}
-
-	if (isSubmitted) {
-		const score = questions.reduce((acc, question) => {
-			return answers[question.id] === question.correctAnswer ? acc + 1 : acc;
-		}, 0);
-		const getScoreColor = (score) => {
-			if (score >= 24) return "success";
-			if (score >= 18) return "warning";
-			return "danger";
-		};
-
-		const getScoreMessage = (score) => {
-			if (score >= 24) return "Excellent!";
-			if (score >= 18) return "Good Job!";
-			return "Keep Practicing!";
-		};
-
-		return (
-			<Box
-				sx={{
-					maxWidth: "32rem",
-					mx: "auto",
-					textAlign: "center",
-				}}
-			>
-				<Card
-					variant="outlined"
-					sx={{
-						p: 4,
-						boxShadow: "md",
-					}}
-				>
-					<Typography level="h1" sx={{ mb: 2 }}>
-						Test Completed!
-					</Typography>
-
-					<Typography level="h3" sx={{ mb: 2 }}>
-						Subject: {subject}
-					</Typography>
-
-					<Typography level="h2" fontWeight="bold" sx={{ mb: 2 }}>
-						Your Score: {score}/30 ({Math.round((score / 30) * 100)}%)
-					</Typography>
-
-					<Chip
-						color={getScoreColor(score)}
-						size="lg"
-						variant="soft"
-						sx={{ mb: 2 }}
-					>
-						{getScoreMessage(score)}
-					</Chip>
-
-					<Typography level="body-md" color="neutral" sx={{ mt: 2 }}>
-						Redirecting to dashboard in 5 seconds...
-					</Typography>
-				</Card>
-			</Box>
-		);
-	}
-
-	const currentQuestion = questions[currentQuestionIndex];
-
-	return (
-		<div
-			onCopy={(event) => {
-				event.preventDefault();
-			}}
-		>
-			<Grid container spacing={2} sx={{ flexGrow: 1 }}>
-				<Grid xs={12} sm={10} lg={10}>
-					<Sheet
-						variant="soft"
-						color="neutral"
-						sx={{ m: 0, borderRadius: "lg" }}
-					>
-						<Tabs
-							variant="soft"
-							aria-label="Scrollable tabs"
-							value={Math.floor(currentQuestionIndex / 20)}
-							onChange={(event, newValue) => {
-								setCurrentQuestionIndex(newValue * 20);
-							}}
-							sx={{
-								height: "85vh",
-								borderRadius: "lg",
-								boxShadow: "lg",
-								overflow: "auto",
-							}}
-						>
-							<TabList
-								disableUnderline
-								tabFlex={1}
-								sx={{
-									[`&& .${tabClasses.root}`]: {
-										[`&.${tabClasses.selected}`]: {
-											color: "primary.plainColor",
-											"&::after": {
-												height: 3,
-												borderRadius: 8,
-												bgcolor: "primary.500",
-											},
-										},
-									},
-								}}
-							>
-								<Tab>
-									<ListItemDecorator sx={{ mx: 0.01 }}>
-										<img
-											src={Test.subjects.aicon}
-											alt="icon"
-											width="30"
-											height="30"
-										/>
-									</ListItemDecorator>
-									<span className="tab_title"> {Test.subjects.a}</span>
-								</Tab>
-								<Tab>
-									<ListItemDecorator sx={{ mx: 0.01 }}>
-										<img
-											src={Test.subjects.bicon}
-											alt="icon"
-											width="30"
-											height="30"
-										/>
-									</ListItemDecorator>
-									<span className="tab_title"> {Test.subjects.b}</span>
-								</Tab>
-								<Tab>
-									<ListItemDecorator sx={{ mx: 0.01 }}>
-										<img
-											src={Test.subjects.cicon}
-											alt="icon"
-											width="30"
-											height="30"
-										/>
-									</ListItemDecorator>
-									<span className="tab_title"> {Test.subjects.c}</span>
-								</Tab>
-								<Tab>
-									<ListItemDecorator sx={{ mx: 0.01 }}>
-										<img
-											src={Test.subjects.dicon}
-											alt="icon"
-											width="30"
-											height="30"
-										/>
-									</ListItemDecorator>
-									<span className="tab_title">{Test.subjects.d}</span>
-								</Tab>
-								<Tab>
-									<ListItemDecorator sx={{ mx: 0.01 }}>
-										<img
-											src={Test.subjects.eicon}
-											alt="icon"
-											width="30"
-											height="30"
-										/>
-									</ListItemDecorator>
-									<span className="tab_title"> {Test.subjects.e}</span>
-								</Tab>
-								<Tab>
-									<ListItemDecorator sx={{ mx: 0.01 }}>
-										<img
-											src={Test.subjects.ficon}
-											alt="icon"
-											width="30"
-											height="30"
-										/>
-									</ListItemDecorator>
-									<span className="tab_title"> {Test.subjects.f}</span>
-								</Tab>
-								<Tab>
-									<ListItemDecorator sx={{ mx: 0.01 }}>
-										<img
-											src={Test.subjects.gicon}
-											alt="icon"
-											width="30"
-											height="30"
-										/>
-									</ListItemDecorator>
-									<span className="tab_title"> {Test.subjects.g}</span>
-								</Tab>
-							</TabList>
-
-							<TabPanel value={0}>
-								<Typography level="h3">{currentQuestion.question}</Typography>
-								<center>
-									<img
-										src={currentQuestion.image}
-										alt="."
-										onerror="this.style.display='none'"
-										className="img"
-										width="500"
-										height="300"
-									/>
-								</center>
-								<div className="bottom">
-									{currentQuestion.options.map((option, index) => (
-										<RadioGroup
-											key={index}
-											className={`w-full text-left p-4 rounded-lg border-2 transition-colors cursor-pointer block ${
-												answers[currentQuestion.id] === index
-													? "border-blue-500 bg-blue-50"
-													: "border-gray-200 hover:border-gray-300"
-											}`}
-										>
-											<Typography level="h1">
-												<Radio
-													size="lg"
-													label={option}
-													type="radio"
-													name={`question-${currentQuestion.id}`}
-													value={index}
-													checked={answers[currentQuestion.id] === index}
-													onChange={() =>
-														handleAnswerSelect(currentQuestion.id, index)
-													}
-													className="mr-3"
-												/>
-											</Typography>
-										</RadioGroup>
-									))}
-
-									<Stack direction="column" spacing={2}>
-										<Stack>
-											<Box
-												sx={{
-													justifyContent: "center",
-													display: "flex",
-													gap: 1,
-													overflowX: "auto",
-													overflowY: "hidden",
-													padding: "8px 16px",
-													scrollbarWidth: "thin",
-													"&::-webkit-scrollbar": {
-														height: 6,
-													},
-													"&::-webkit-scrollbar-track": {
-														backgroundColor: "grey.100",
-														borderRadius: 3,
-													},
-													"&::-webkit-scrollbar-thumb": {
-														backgroundColor: "grey.400",
-														borderRadius: 3,
-														"&:hover": {
-															backgroundColor: "grey.500",
-														},
-													},
-												}}
-											>
-												{questions.slice(0, 20).map((_, index) => (
-													<Button
-														key={index}
-														onClick={() => setCurrentQuestionIndex(index)}
-														variant={
-															index === currentQuestionIndex
-																? "contained"
-																: "outlined"
-														}
-														size="small"
-														sx={{
-															minWidth: 40,
-															width: 40,
-															height: 40,
-															borderRadius: 2,
-															fontSize: "0.875rem",
-															fontWeight: 500,
-															position: "relative",
-															flexShrink: 0,
-															...(index === currentQuestionIndex && {
-																backgroundColor: "primary.main",
-																color: "primary.contrastText",
-																"&:hover": {
-																	backgroundColor: "primary.dark",
-																},
-															}),
-															...(index !== currentQuestionIndex &&
-																answers[questions[index].id] !== undefined && {
-																	backgroundColor: "success.light",
-																	color: "success.dark",
-																	borderColor: "success.light",
-																	"&:hover": {
-																		backgroundColor: "success.main",
-																		borderColor: "success.main",
-																	},
-																}),
-															...(index !== currentQuestionIndex &&
-																answers[questions[index].id] === undefined && {
-																	backgroundColor: "grey.100",
-																	color: "grey.600",
-																	borderColor: "grey.300",
-																	"&:hover": {
-																		backgroundColor: "grey.200",
-																		borderColor: "grey.400",
-																	},
-																}),
-															...(markedForReview &&
-																markedForReview[questions[index].id] && {
-																	"&::after": {
-																		content: '"⚠"',
-																		position: "absolute",
-																		top: -4,
-																		right: -4,
-																		fontSize: "24px",
-																		backgroundColor: "warning.main",
-																		color: "red",
-																		borderRadius: "50%",
-																		width: 16,
-																		height: 16,
-																		display: "flex",
-																		alignItems: "center",
-																		justifyContent: "center",
-																	},
-																}),
-														}}
-													>
-														{index + 1}
-													</Button>
-												))}
-											</Box>
-										</Stack>
-										<Stack
-											direction={{ md: "row", lg: "row" }}
-											sx={{
-												justifyContent: "space-between",
-												alignItems: "center",
-											}}
-										>
-											<Stack
-												direction={{ md: "row", lg: "row" }}
-												spacing={{ xs: 1, sm: 1, md: 1 }}
-												sx={{
-													justifyContent: "flex-start",
-													alignItems: "flex-end",
-												}}
-											>
-												<Stack direction="row" spacing={1}>
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-
-															if (nextIndex > 0 && nextIndex % 20 === 0) {
-															}
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														SAVE & NEXT
-													</Button>
-													<Button
-														onClick={() => {
-															const newAnswers = { ...answers };
-															delete newAnswers[
-																questions[currentQuestionIndex].id
-															];
-															setAnswers(newAnswers);
-
-															if (
-																markedForReview &&
-																markedForReview[
-																	questions[currentQuestionIndex].id
-																]
-															) {
-																const newMarkedForReview = {
-																	...markedForReview,
-																};
-																delete newMarkedForReview[
-																	questions[currentQuestionIndex].id
-																];
-																setMarkedForReview(newMarkedForReview);
-															}
-														}}
-														size="lg"
-														color="neutral"
-														variant="solid"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														CLEAR
-													</Button>
-												</Stack>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-													}}
-													size="lg"
-													color="warning"
-													className="swiper-button image-swiper-button-next"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													SAVE & MARK FOR REVIEW
-												</Button>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-
-														const nextIndex = Math.min(
-															questions.length - 1,
-															currentQuestionIndex + 1,
-														);
-														setCurrentQuestionIndex(nextIndex);
-													}}
-													className="swiper-button image-swiper-button-next"
-													size="lg"
-													color="success"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													MARK FOR REVIEW & NEXT
-												</Button>
-											</Stack>
-
-											<Stack
-												direction="row"
-												spacing={0}
-												sx={{
-													justifyContent: "flex-end",
-													alignItems: "flex-end",
-												}}
-											>
-												<Box
-													sx={{ display: "flex", gap: 2, whiteSpace: "nowrap" }}
-													className="nav-button"
-												>
-													<Button
-														onClick={() =>
-															setCurrentQuestionIndex(
-																Math.max(0, currentQuestionIndex - 1),
-															)
-														}
-														disabled={currentQuestionIndex === 0}
-														className="swiper-button image-swiper-button-prev"
-														size="lg"
-													>
-														<NavigateBeforeIcon />
-														Back
-													</Button>
-
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-													>
-														Next
-														<NavigateNextIcon />
-													</Button>
-												</Box>
-											</Stack>
-										</Stack>
-									</Stack>
-								</div>
-							</TabPanel>
-
-							<TabPanel value={1}>
-								<Typography level="h3">{currentQuestion.question}</Typography>
-								<center>
-									<img
-										src={currentQuestion.image}
-										alt="."
-										onerror="this.style.display='none'"
-										className="img"
-										width="500"
-										height="300"
-									/>
-								</center>
-								<div className="bottom">
-									{currentQuestion.options.map((option, index) => (
-										<RadioGroup
-											key={index}
-											className={`w-full text-left p-4 rounded-lg border-2 transition-colors cursor-pointer block ${
-												answers[currentQuestion.id] === index
-													? "border-blue-500 bg-blue-50"
-													: "border-gray-200 hover:border-gray-300"
-											}`}
-										>
-											<Typography level="h1">
-												<Radio
-													size="lg"
-													label={option}
-													type="radio"
-													name={`question-${currentQuestion.id}`}
-													value={index}
-													checked={answers[currentQuestion.id] === index}
-													onChange={() =>
-														handleAnswerSelect(currentQuestion.id, index)
-													}
-													className="mr-3"
-												/>
-											</Typography>
-										</RadioGroup>
-									))}
-
-									<Stack direction="column" spacing={2}>
-										<Stack>
-											<Box
-												sx={{
-													justifyContent: "center",
-													display: "flex",
-													gap: 1,
-													overflowX: "auto",
-													overflowY: "hidden",
-													padding: "8px 16px",
-													scrollbarWidth: "thin",
-													"&::-webkit-scrollbar": {
-														height: 6,
-													},
-													"&::-webkit-scrollbar-track": {
-														backgroundColor: "grey.100",
-														borderRadius: 3,
-													},
-													"&::-webkit-scrollbar-thumb": {
-														backgroundColor: "grey.400",
-														borderRadius: 3,
-														"&:hover": {
-															backgroundColor: "grey.500",
-														},
-													},
-												}}
-											>
-												{questions.slice(20, 40).map((_, index) => {
-													const actualIndex = index + 20;
-													return (
-														<Button
-															key={actualIndex}
-															onClick={() =>
-																setCurrentQuestionIndex(actualIndex)
-															}
-															variant={
-																actualIndex === currentQuestionIndex
-																	? "contained"
-																	: "outlined"
-															}
-															size="small"
-															sx={{
-																minWidth: 40,
-																width: 40,
-																height: 40,
-																borderRadius: 2,
-																fontSize: "0.875rem",
-																fontWeight: 500,
-																position: "relative",
-																flexShrink: 0,
-																...(actualIndex === currentQuestionIndex && {
-																	backgroundColor: "primary.main",
-																	color: "primary.contrastText",
-																	"&:hover": {
-																		backgroundColor: "primary.dark",
-																	},
-																}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] !==
-																		undefined && {
-																		backgroundColor: "success.light",
-																		color: "success.dark",
-																		borderColor: "success.light",
-																		"&:hover": {
-																			backgroundColor: "success.main",
-																			borderColor: "success.main",
-																		},
-																	}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] ===
-																		undefined && {
-																		backgroundColor: "grey.100",
-																		color: "grey.600",
-																		borderColor: "grey.300",
-																		"&:hover": {
-																			backgroundColor: "grey.200",
-																			borderColor: "grey.400",
-																		},
-																	}),
-																...(markedForReview &&
-																	markedForReview[
-																		questions[actualIndex].id
-																	] && {
-																		"&::after": {
-																			content: '"⚠"',
-																			position: "absolute",
-																			top: -4,
-																			right: -4,
-																			fontSize: "24px",
-																			backgroundColor: "warning.main",
-																			color: "red",
-																			borderRadius: "50%",
-																			width: 16,
-																			height: 16,
-																			display: "flex",
-																			alignItems: "center",
-																			justifyContent: "center",
-																		},
-																	}),
-															}}
-														>
-															{actualIndex + 1}
-														</Button>
-													);
-												})}
-											</Box>
-										</Stack>
-
-										<Stack
-											direction={{ md: "row", lg: "row" }}
-											sx={{
-												justifyContent: "space-between",
-												alignItems: "center",
-											}}
-										>
-											<Stack
-												direction={{ md: "row", lg: "row" }}
-												spacing={{ xs: 1, sm: 1, md: 1 }}
-												sx={{
-													justifyContent: "flex-start",
-													alignItems: "flex-end",
-												}}
-											>
-												<Stack direction="row" spacing={1}>
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														SAVE & NEXT
-													</Button>
-													<Button
-														onClick={() => {
-															const newAnswers = { ...answers };
-															delete newAnswers[
-																questions[currentQuestionIndex].id
-															];
-															setAnswers(newAnswers);
-
-															if (
-																markedForReview &&
-																markedForReview[
-																	questions[currentQuestionIndex].id
-																]
-															) {
-																const newMarkedForReview = {
-																	...markedForReview,
-																};
-																delete newMarkedForReview[
-																	questions[currentQuestionIndex].id
-																];
-																setMarkedForReview(newMarkedForReview);
-															}
-														}}
-														size="lg"
-														color="neutral"
-														variant="solid"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														CLEAR
-													</Button>
-												</Stack>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-													}}
-													size="lg"
-													color="warning"
-													className="swiper-button image-swiper-button-next"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													SAVE & MARK FOR REVIEW
-												</Button>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-
-														const nextIndex = Math.min(
-															questions.length - 1,
-															currentQuestionIndex + 1,
-														);
-														setCurrentQuestionIndex(nextIndex);
-													}}
-													className="swiper-button image-swiper-button-next"
-													size="lg"
-													color="success"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													MARK FOR REVIEW & NEXT
-												</Button>
-											</Stack>
-
-											<Stack
-												direction="row"
-												spacing={0}
-												sx={{
-													justifyContent: "flex-end",
-													alignItems: "flex-end",
-												}}
-											>
-												<Box
-													sx={{ display: "flex", gap: 2, whiteSpace: "nowrap" }}
-													className="nav-button"
-												>
-													<Button
-														onClick={() =>
-															setCurrentQuestionIndex(
-																Math.max(0, currentQuestionIndex - 1),
-															)
-														}
-														disabled={currentQuestionIndex === 0}
-														className="swiper-button image-swiper-button-prev"
-														size="lg"
-													>
-														<NavigateBeforeIcon />
-														Back
-													</Button>
-
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-													>
-														Next
-														<NavigateNextIcon />
-													</Button>
-												</Box>
-											</Stack>
-										</Stack>
-									</Stack>
-								</div>
-							</TabPanel>
-
-							<TabPanel value={2}>
-								<Typography level="h3">{currentQuestion.question}</Typography>
-								<center>
-									<img
-										src={currentQuestion.image}
-										alt="."
-										onerror="this.style.display='none'"
-										className="img"
-										width="500"
-										height="300"
-									/>
-								</center>
-								<div className="bottom">
-									{currentQuestion.options.map((option, index) => (
-										<RadioGroup
-											key={index}
-											className={`w-full text-left p-4 rounded-lg border-2 transition-colors cursor-pointer block ${
-												answers[currentQuestion.id] === index
-													? "border-blue-500 bg-blue-50"
-													: "border-gray-200 hover:border-gray-300"
-											}`}
-										>
-											<Typography level="h1">
-												<Radio
-													size="lg"
-													label={option}
-													type="radio"
-													name={`question-${currentQuestion.id}`}
-													value={index}
-													checked={answers[currentQuestion.id] === index}
-													onChange={() =>
-														handleAnswerSelect(currentQuestion.id, index)
-													}
-													className="mr-3"
-												/>
-											</Typography>
-										</RadioGroup>
-									))}
-
-									<Stack direction="column" spacing={2}>
-										<Stack>
-											<Box
-												sx={{
-													justifyContent: "center",
-													display: "flex",
-													gap: 1,
-													overflowX: "auto",
-													overflowY: "hidden",
-													padding: "8px 16px",
-													scrollbarWidth: "thin",
-													"&::-webkit-scrollbar": {
-														height: 6,
-													},
-													"&::-webkit-scrollbar-track": {
-														backgroundColor: "grey.100",
-														borderRadius: 3,
-													},
-													"&::-webkit-scrollbar-thumb": {
-														backgroundColor: "grey.400",
-														borderRadius: 3,
-														"&:hover": {
-															backgroundColor: "grey.500",
-														},
-													},
-												}}
-											>
-												{questions.slice(40, 60).map((_, index) => {
-													const actualIndex = index + 40;
-													return (
-														<Button
-															key={actualIndex}
-															onClick={() =>
-																setCurrentQuestionIndex(actualIndex)
-															}
-															variant={
-																actualIndex === currentQuestionIndex
-																	? "contained"
-																	: "outlined"
-															}
-															size="small"
-															sx={{
-																minWidth: 40,
-																width: 40,
-																height: 40,
-																borderRadius: 2,
-																fontSize: "0.875rem",
-																fontWeight: 500,
-																position: "relative",
-																flexShrink: 0,
-																...(actualIndex === currentQuestionIndex && {
-																	backgroundColor: "primary.main",
-																	color: "primary.contrastText",
-																	"&:hover": {
-																		backgroundColor: "primary.dark",
-																	},
-																}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] !==
-																		undefined && {
-																		backgroundColor: "success.light",
-																		color: "success.dark",
-																		borderColor: "success.light",
-																		"&:hover": {
-																			backgroundColor: "success.main",
-																			borderColor: "success.main",
-																		},
-																	}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] ===
-																		undefined && {
-																		backgroundColor: "grey.100",
-																		color: "grey.600",
-																		borderColor: "grey.300",
-																		"&:hover": {
-																			backgroundColor: "grey.200",
-																			borderColor: "grey.400",
-																		},
-																	}),
-																...(markedForReview &&
-																	markedForReview[
-																		questions[actualIndex].id
-																	] && {
-																		"&::after": {
-																			content: '"⚠"',
-																			position: "absolute",
-																			top: -4,
-																			right: -4,
-																			fontSize: "24px",
-																			backgroundColor: "warning.main",
-																			color: "red",
-																			borderRadius: "50%",
-																			width: 16,
-																			height: 16,
-																			display: "flex",
-																			alignItems: "center",
-																			justifyContent: "center",
-																		},
-																	}),
-															}}
-														>
-															{actualIndex + 1}
-														</Button>
-													);
-												})}
-											</Box>
-										</Stack>
-
-										<Stack
-											direction={{ md: "row", lg: "row" }}
-											sx={{
-												justifyContent: "space-between",
-												alignItems: "center",
-											}}
-										>
-											<Stack
-												direction={{ md: "row", lg: "row" }}
-												spacing={{ xs: 1, sm: 1, md: 1 }}
-												sx={{
-													justifyContent: "flex-start",
-													alignItems: "flex-end",
-												}}
-											>
-												<Stack direction="row" spacing={1}>
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														SAVE & NEXT
-													</Button>
-													<Button
-														onClick={() => {
-															const newAnswers = { ...answers };
-															delete newAnswers[
-																questions[currentQuestionIndex].id
-															];
-															setAnswers(newAnswers);
-
-															if (
-																markedForReview &&
-																markedForReview[
-																	questions[currentQuestionIndex].id
-																]
-															) {
-																const newMarkedForReview = {
-																	...markedForReview,
-																};
-																delete newMarkedForReview[
-																	questions[currentQuestionIndex].id
-																];
-																setMarkedForReview(newMarkedForReview);
-															}
-														}}
-														size="lg"
-														color="neutral"
-														variant="solid"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														CLEAR
-													</Button>
-												</Stack>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-													}}
-													size="lg"
-													color="warning"
-													className="swiper-button image-swiper-button-next"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													SAVE & MARK FOR REVIEW
-												</Button>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-
-														const nextIndex = Math.min(
-															questions.length - 1,
-															currentQuestionIndex + 1,
-														);
-														setCurrentQuestionIndex(nextIndex);
-													}}
-													className="swiper-button image-swiper-button-next"
-													size="lg"
-													color="success"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													MARK FOR REVIEW & NEXT
-												</Button>
-											</Stack>
-
-											<Stack
-												direction="row"
-												spacing={0}
-												sx={{
-													justifyContent: "flex-end",
-													alignItems: "flex-end",
-												}}
-											>
-												<Box
-													sx={{ display: "flex", gap: 2, whiteSpace: "nowrap" }}
-													className="nav-button"
-												>
-													<Button
-														onClick={() =>
-															setCurrentQuestionIndex(
-																Math.max(0, currentQuestionIndex - 1),
-															)
-														}
-														disabled={currentQuestionIndex === 0}
-														className="swiper-button image-swiper-button-prev"
-														size="lg"
-													>
-														<NavigateBeforeIcon />
-														Back
-													</Button>
-
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-													>
-														Next
-														<NavigateNextIcon />
-													</Button>
-												</Box>
-											</Stack>
-										</Stack>
-									</Stack>
-								</div>
-							</TabPanel>
-							<TabPanel value={3}>
-								<Typography level="h3">{currentQuestion.question}</Typography>
-								<center>
-									<img
-										src={currentQuestion.image}
-										alt="."
-										onerror="this.style.display='none'"
-										className="img"
-										width="500"
-										height="300"
-									/>
-								</center>
-								<div className="bottom">
-									{currentQuestion.options.map((option, index) => (
-										<RadioGroup
-											key={index}
-											className={`w-full text-left p-4 rounded-lg border-2 transition-colors cursor-pointer block ${
-												answers[currentQuestion.id] === index
-													? "border-blue-500 bg-blue-50"
-													: "border-gray-200 hover:border-gray-300"
-											}`}
-										>
-											<Typography level="h1">
-												<Radio
-													size="lg"
-													label={option}
-													type="radio"
-													name={`question-${currentQuestion.id}`}
-													value={index}
-													checked={answers[currentQuestion.id] === index}
-													onChange={() =>
-														handleAnswerSelect(currentQuestion.id, index)
-													}
-													className="mr-3"
-												/>
-											</Typography>
-										</RadioGroup>
-									))}
-
-									<Stack direction="column" spacing={2}>
-										<Stack>
-											<Box
-												sx={{
-													justifyContent: "center",
-													display: "flex",
-													gap: 1,
-													overflowX: "auto",
-													overflowY: "hidden",
-													padding: "8px 16px",
-													scrollbarWidth: "thin",
-													"&::-webkit-scrollbar": {
-														height: 6,
-													},
-													"&::-webkit-scrollbar-track": {
-														backgroundColor: "grey.100",
-														borderRadius: 3,
-													},
-													"&::-webkit-scrollbar-thumb": {
-														backgroundColor: "grey.400",
-														borderRadius: 3,
-														"&:hover": {
-															backgroundColor: "grey.500",
-														},
-													},
-												}}
-											>
-												{questions.slice(60, 80).map((_, index) => {
-													const actualIndex = index + 60;
-													return (
-														<Button
-															key={actualIndex}
-															onClick={() =>
-																setCurrentQuestionIndex(actualIndex)
-															}
-															variant={
-																actualIndex === currentQuestionIndex
-																	? "contained"
-																	: "outlined"
-															}
-															size="small"
-															sx={{
-																minWidth: 40,
-																width: 40,
-																height: 40,
-																borderRadius: 2,
-																fontSize: "0.875rem",
-																fontWeight: 500,
-																position: "relative",
-																flexShrink: 0,
-																...(actualIndex === currentQuestionIndex && {
-																	backgroundColor: "primary.main",
-																	color: "primary.contrastText",
-																	"&:hover": {
-																		backgroundColor: "primary.dark",
-																	},
-																}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] !==
-																		undefined && {
-																		backgroundColor: "success.light",
-																		color: "success.dark",
-																		borderColor: "success.light",
-																		"&:hover": {
-																			backgroundColor: "success.main",
-																			borderColor: "success.main",
-																		},
-																	}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] ===
-																		undefined && {
-																		backgroundColor: "grey.100",
-																		color: "grey.600",
-																		borderColor: "grey.300",
-																		"&:hover": {
-																			backgroundColor: "grey.200",
-																			borderColor: "grey.400",
-																		},
-																	}),
-																...(markedForReview &&
-																	markedForReview[
-																		questions[actualIndex].id
-																	] && {
-																		"&::after": {
-																			content: '"⚠"',
-																			position: "absolute",
-																			top: -4,
-																			right: -4,
-																			fontSize: "24px",
-																			backgroundColor: "warning.main",
-																			color: "red",
-																			borderRadius: "50%",
-																			width: 16,
-																			height: 16,
-																			display: "flex",
-																			alignItems: "center",
-																			justifyContent: "center",
-																		},
-																	}),
-															}}
-														>
-															{actualIndex + 1}
-														</Button>
-													);
-												})}
-											</Box>
-										</Stack>
-
-										<Stack
-											direction={{ md: "row", lg: "row" }}
-											sx={{
-												justifyContent: "space-between",
-												alignItems: "center",
-											}}
-										>
-											<Stack
-												direction={{ md: "row", lg: "row" }}
-												spacing={{ xs: 1, sm: 1, md: 1 }}
-												sx={{
-													justifyContent: "flex-start",
-													alignItems: "flex-end",
-												}}
-											>
-												<Stack direction="row" spacing={1}>
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														SAVE & NEXT
-													</Button>
-													<Button
-														onClick={() => {
-															const newAnswers = { ...answers };
-															delete newAnswers[
-																questions[currentQuestionIndex].id
-															];
-															setAnswers(newAnswers);
-
-															if (
-																markedForReview &&
-																markedForReview[
-																	questions[currentQuestionIndex].id
-																]
-															) {
-																const newMarkedForReview = {
-																	...markedForReview,
-																};
-																delete newMarkedForReview[
-																	questions[currentQuestionIndex].id
-																];
-																setMarkedForReview(newMarkedForReview);
-															}
-														}}
-														size="lg"
-														color="neutral"
-														variant="solid"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														CLEAR
-													</Button>
-												</Stack>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-													}}
-													size="lg"
-													color="warning"
-													className="swiper-button image-swiper-button-next"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													SAVE & MARK FOR REVIEW
-												</Button>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-
-														const nextIndex = Math.min(
-															questions.length - 1,
-															currentQuestionIndex + 1,
-														);
-														setCurrentQuestionIndex(nextIndex);
-													}}
-													className="swiper-button image-swiper-button-next"
-													size="lg"
-													color="success"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													MARK FOR REVIEW & NEXT
-												</Button>
-											</Stack>
-
-											<Stack
-												direction="row"
-												spacing={0}
-												sx={{
-													justifyContent: "flex-end",
-													alignItems: "flex-end",
-												}}
-											>
-												<Box
-													sx={{ display: "flex", gap: 2, whiteSpace: "nowrap" }}
-													className="nav-button"
-												>
-													<Button
-														onClick={() =>
-															setCurrentQuestionIndex(
-																Math.max(0, currentQuestionIndex - 1),
-															)
-														}
-														disabled={currentQuestionIndex === 0}
-														className="swiper-button image-swiper-button-prev"
-														size="lg"
-													>
-														<NavigateBeforeIcon />
-														Back
-													</Button>
-
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-													>
-														Next
-														<NavigateNextIcon />
-													</Button>
-												</Box>
-											</Stack>
-										</Stack>
-									</Stack>
-								</div>
-							</TabPanel>
-							<TabPanel value={4}>
-								<Typography level="h3">{currentQuestion.question}</Typography>
-								<center>
-									<img
-										src={currentQuestion.image}
-										alt="."
-										onerror="this.style.display='none'"
-										className="img"
-										width="500"
-										height="300"
-									/>
-								</center>
-								<div className="bottom">
-									{currentQuestion.options.map((option, index) => (
-										<RadioGroup
-											key={index}
-											className={`w-full text-left p-4 rounded-lg border-2 transition-colors cursor-pointer block ${
-												answers[currentQuestion.id] === index
-													? "border-blue-500 bg-blue-50"
-													: "border-gray-200 hover:border-gray-300"
-											}`}
-										>
-											<Typography level="h1">
-												<Radio
-													size="lg"
-													label={option}
-													type="radio"
-													name={`question-${currentQuestion.id}`}
-													value={index}
-													checked={answers[currentQuestion.id] === index}
-													onChange={() =>
-														handleAnswerSelect(currentQuestion.id, index)
-													}
-													className="mr-3"
-												/>
-											</Typography>
-										</RadioGroup>
-									))}
-
-									<Stack direction="column" spacing={2}>
-										<Stack>
-											<Box
-												sx={{
-													justifyContent: "center",
-													display: "flex",
-													gap: 1,
-													overflowX: "auto",
-													overflowY: "hidden",
-													padding: "8px 16px",
-													scrollbarWidth: "thin",
-													"&::-webkit-scrollbar": {
-														height: 6,
-													},
-													"&::-webkit-scrollbar-track": {
-														backgroundColor: "grey.100",
-														borderRadius: 3,
-													},
-													"&::-webkit-scrollbar-thumb": {
-														backgroundColor: "grey.400",
-														borderRadius: 3,
-														"&:hover": {
-															backgroundColor: "grey.500",
-														},
-													},
-												}}
-											>
-												{questions.slice(80, 100).map((_, index) => {
-													const actualIndex = index + 80;
-													return (
-														<Button
-															key={actualIndex}
-															onClick={() =>
-																setCurrentQuestionIndex(actualIndex)
-															}
-															variant={
-																actualIndex === currentQuestionIndex
-																	? "contained"
-																	: "outlined"
-															}
-															size="small"
-															sx={{
-																minWidth: 40,
-																width: 40,
-																height: 40,
-																borderRadius: 2,
-																fontSize: "0.875rem",
-																fontWeight: 500,
-																position: "relative",
-																flexShrink: 0,
-																...(actualIndex === currentQuestionIndex && {
-																	backgroundColor: "primary.main",
-																	color: "primary.contrastText",
-																	"&:hover": {
-																		backgroundColor: "primary.dark",
-																	},
-																}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] !==
-																		undefined && {
-																		backgroundColor: "success.light",
-																		color: "success.dark",
-																		borderColor: "success.light",
-																		"&:hover": {
-																			backgroundColor: "success.main",
-																			borderColor: "success.main",
-																		},
-																	}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] ===
-																		undefined && {
-																		backgroundColor: "grey.100",
-																		color: "grey.600",
-																		borderColor: "grey.300",
-																		"&:hover": {
-																			backgroundColor: "grey.200",
-																			borderColor: "grey.400",
-																		},
-																	}),
-																...(markedForReview &&
-																	markedForReview[
-																		questions[actualIndex].id
-																	] && {
-																		"&::after": {
-																			content: '"⚠"',
-																			position: "absolute",
-																			top: -4,
-																			right: -4,
-																			fontSize: "24px",
-																			backgroundColor: "warning.main",
-																			color: "red",
-																			borderRadius: "50%",
-																			width: 16,
-																			height: 16,
-																			display: "flex",
-																			alignItems: "center",
-																			justifyContent: "center",
-																		},
-																	}),
-															}}
-														>
-															{actualIndex + 1}
-														</Button>
-													);
-												})}
-											</Box>
-										</Stack>
-
-										<Stack
-											direction={{ md: "row", lg: "row" }}
-											sx={{
-												justifyContent: "space-between",
-												alignItems: "center",
-											}}
-										>
-											<Stack
-												direction={{ md: "row", lg: "row" }}
-												spacing={{ xs: 1, sm: 1, md: 1 }}
-												sx={{
-													justifyContent: "flex-start",
-													alignItems: "flex-end",
-												}}
-											>
-												<Stack direction="row" spacing={1}>
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														SAVE & NEXT
-													</Button>
-													<Button
-														onClick={() => {
-															const newAnswers = { ...answers };
-															delete newAnswers[
-																questions[currentQuestionIndex].id
-															];
-															setAnswers(newAnswers);
-
-															if (
-																markedForReview &&
-																markedForReview[
-																	questions[currentQuestionIndex].id
-																]
-															) {
-																const newMarkedForReview = {
-																	...markedForReview,
-																};
-																delete newMarkedForReview[
-																	questions[currentQuestionIndex].id
-																];
-																setMarkedForReview(newMarkedForReview);
-															}
-														}}
-														size="lg"
-														color="neutral"
-														variant="solid"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														CLEAR
-													</Button>
-												</Stack>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-													}}
-													size="lg"
-													color="warning"
-													className="swiper-button image-swiper-button-next"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													SAVE & MARK FOR REVIEW
-												</Button>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-
-														const nextIndex = Math.min(
-															questions.length - 1,
-															currentQuestionIndex + 1,
-														);
-														setCurrentQuestionIndex(nextIndex);
-													}}
-													className="swiper-button image-swiper-button-next"
-													size="lg"
-													color="success"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													MARK FOR REVIEW & NEXT
-												</Button>
-											</Stack>
-
-											<Stack
-												direction="row"
-												spacing={0}
-												sx={{
-													justifyContent: "flex-end",
-													alignItems: "flex-end",
-												}}
-											>
-												<Box
-													sx={{ display: "flex", gap: 2, whiteSpace: "nowrap" }}
-													className="nav-button"
-												>
-													<Button
-														onClick={() =>
-															setCurrentQuestionIndex(
-																Math.max(0, currentQuestionIndex - 1),
-															)
-														}
-														disabled={currentQuestionIndex === 0}
-														className="swiper-button image-swiper-button-prev"
-														size="lg"
-													>
-														<NavigateBeforeIcon />
-														Back
-													</Button>
-
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-													>
-														Next
-														<NavigateNextIcon />
-													</Button>
-												</Box>
-											</Stack>
-										</Stack>
-									</Stack>
-								</div>
-							</TabPanel>
-							<TabPanel value={5}>
-								<Typography level="h3">{currentQuestion.question}</Typography>
-								<center>
-									<img
-										src={currentQuestion.image}
-										alt="."
-										onerror="this.style.display='none'"
-										className="img"
-										width="500"
-										height="300"
-									/>
-								</center>
-								<div className="bottom">
-									{currentQuestion.options.map((option, index) => (
-										<RadioGroup
-											key={index}
-											className={`w-full text-left p-4 rounded-lg border-2 transition-colors cursor-pointer block ${
-												answers[currentQuestion.id] === index
-													? "border-blue-500 bg-blue-50"
-													: "border-gray-200 hover:border-gray-300"
-											}`}
-										>
-											<Typography level="h1">
-												<Radio
-													size="lg"
-													label={option}
-													type="radio"
-													name={`question-${currentQuestion.id}`}
-													value={index}
-													checked={answers[currentQuestion.id] === index}
-													onChange={() =>
-														handleAnswerSelect(currentQuestion.id, index)
-													}
-													className="mr-3"
-												/>
-											</Typography>
-										</RadioGroup>
-									))}
-
-									<Stack direction="column" spacing={2}>
-										<Stack>
-											<Box
-												sx={{
-													justifyContent: "center",
-													display: "flex",
-													gap: 1,
-													overflowX: "auto",
-													overflowY: "hidden",
-													padding: "8px 16px",
-													scrollbarWidth: "thin",
-													"&::-webkit-scrollbar": {
-														height: 6,
-													},
-													"&::-webkit-scrollbar-track": {
-														backgroundColor: "grey.100",
-														borderRadius: 3,
-													},
-													"&::-webkit-scrollbar-thumb": {
-														backgroundColor: "grey.400",
-														borderRadius: 3,
-														"&:hover": {
-															backgroundColor: "grey.500",
-														},
-													},
-												}}
-											>
-												{questions.slice(100, 120).map((_, index) => {
-													const actualIndex = index + 100;
-													return (
-														<Button
-															key={actualIndex}
-															onClick={() =>
-																setCurrentQuestionIndex(actualIndex)
-															}
-															variant={
-																actualIndex === currentQuestionIndex
-																	? "contained"
-																	: "outlined"
-															}
-															size="small"
-															sx={{
-																minWidth: 40,
-																width: 40,
-																height: 40,
-																borderRadius: 2,
-																fontSize: "0.875rem",
-																fontWeight: 500,
-																position: "relative",
-																flexShrink: 0,
-																...(actualIndex === currentQuestionIndex && {
-																	backgroundColor: "primary.main",
-																	color: "primary.contrastText",
-																	"&:hover": {
-																		backgroundColor: "primary.dark",
-																	},
-																}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] !==
-																		undefined && {
-																		backgroundColor: "success.light",
-																		color: "success.dark",
-																		borderColor: "success.light",
-																		"&:hover": {
-																			backgroundColor: "success.main",
-																			borderColor: "success.main",
-																		},
-																	}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] ===
-																		undefined && {
-																		backgroundColor: "grey.100",
-																		color: "grey.600",
-																		borderColor: "grey.300",
-																		"&:hover": {
-																			backgroundColor: "grey.200",
-																			borderColor: "grey.400",
-																		},
-																	}),
-																...(markedForReview &&
-																	markedForReview[
-																		questions[actualIndex].id
-																	] && {
-																		"&::after": {
-																			content: '"⚠"',
-																			position: "absolute",
-																			top: -4,
-																			right: -4,
-																			fontSize: "24px",
-																			backgroundColor: "warning.main",
-																			color: "red",
-																			borderRadius: "50%",
-																			width: 16,
-																			height: 16,
-																			display: "flex",
-																			alignItems: "center",
-																			justifyContent: "center",
-																		},
-																	}),
-															}}
-														>
-															{actualIndex + 1}
-														</Button>
-													);
-												})}
-											</Box>
-										</Stack>
-
-										<Stack
-											direction={{ md: "row", lg: "row" }}
-											sx={{
-												justifyContent: "space-between",
-												alignItems: "center",
-											}}
-										>
-											<Stack
-												direction={{ md: "row", lg: "row" }}
-												spacing={{ xs: 1, sm: 1, md: 1 }}
-												sx={{
-													justifyContent: "flex-start",
-													alignItems: "flex-end",
-												}}
-											>
-												<Stack direction="row" spacing={1}>
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														SAVE & NEXT
-													</Button>
-													<Button
-														onClick={() => {
-															const newAnswers = { ...answers };
-															delete newAnswers[
-																questions[currentQuestionIndex].id
-															];
-															setAnswers(newAnswers);
-
-															if (
-																markedForReview &&
-																markedForReview[
-																	questions[currentQuestionIndex].id
-																]
-															) {
-																const newMarkedForReview = {
-																	...markedForReview,
-																};
-																delete newMarkedForReview[
-																	questions[currentQuestionIndex].id
-																];
-																setMarkedForReview(newMarkedForReview);
-															}
-														}}
-														size="lg"
-														color="neutral"
-														variant="solid"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														CLEAR
-													</Button>
-												</Stack>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-													}}
-													size="lg"
-													color="warning"
-													className="swiper-button image-swiper-button-next"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													SAVE & MARK FOR REVIEW
-												</Button>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-
-														const nextIndex = Math.min(
-															questions.length - 1,
-															currentQuestionIndex + 1,
-														);
-														setCurrentQuestionIndex(nextIndex);
-													}}
-													className="swiper-button image-swiper-button-next"
-													size="lg"
-													color="success"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													MARK FOR REVIEW & NEXT
-												</Button>
-											</Stack>
-
-											<Stack
-												direction="row"
-												spacing={0}
-												sx={{
-													justifyContent: "flex-end",
-													alignItems: "flex-end",
-												}}
-											>
-												<Box
-													sx={{ display: "flex", gap: 2, whiteSpace: "nowrap" }}
-													className="nav-button"
-												>
-													<Button
-														onClick={() =>
-															setCurrentQuestionIndex(
-																Math.max(0, currentQuestionIndex - 1),
-															)
-														}
-														disabled={currentQuestionIndex === 0}
-														className="swiper-button image-swiper-button-prev"
-														size="lg"
-													>
-														<NavigateBeforeIcon />
-														Back
-													</Button>
-
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-													>
-														Next
-														<NavigateNextIcon />
-													</Button>
-												</Box>
-											</Stack>
-										</Stack>
-									</Stack>
-								</div>
-							</TabPanel>
-							<TabPanel value={6}>
-								<Typography level="h3">{currentQuestion.question}</Typography>
-								<center>
-									<img
-										src={currentQuestion.image}
-										alt="."
-										onerror="this.style.display='none'"
-										className="img"
-										width="500"
-										height="300"
-									/>
-								</center>
-								<div className="bottom">
-									{currentQuestion.options.map((option, index) => (
-										<RadioGroup
-											key={index}
-											className={`w-full text-left p-4 rounded-lg border-2 transition-colors cursor-pointer block ${
-												answers[currentQuestion.id] === index
-													? "border-blue-500 bg-blue-50"
-													: "border-gray-200 hover:border-gray-300"
-											}`}
-										>
-											<Typography level="h1">
-												<Radio
-													size="lg"
-													label={option}
-													type="radio"
-													name={`question-${currentQuestion.id}`}
-													value={index}
-													checked={answers[currentQuestion.id] === index}
-													onChange={() =>
-														handleAnswerSelect(currentQuestion.id, index)
-													}
-													className="mr-3"
-												/>
-											</Typography>
-										</RadioGroup>
-									))}
-
-									<Stack direction="column" spacing={2}>
-										<Stack>
-											<Box
-												sx={{
-													justifyContent: "center",
-													display: "flex",
-													gap: 1,
-													overflowX: "auto",
-													overflowY: "hidden",
-													padding: "8px 16px",
-													scrollbarWidth: "thin",
-													"&::-webkit-scrollbar": {
-														height: 6,
-													},
-													"&::-webkit-scrollbar-track": {
-														backgroundColor: "grey.100",
-														borderRadius: 3,
-													},
-													"&::-webkit-scrollbar-thumb": {
-														backgroundColor: "grey.400",
-														borderRadius: 3,
-														"&:hover": {
-															backgroundColor: "grey.500",
-														},
-													},
-												}}
-											>
-												{questions.slice(120, 140).map((_, index) => {
-													const actualIndex = index + 120;
-													return (
-														<Button
-															key={actualIndex}
-															onClick={() =>
-																setCurrentQuestionIndex(actualIndex)
-															}
-															variant={
-																actualIndex === currentQuestionIndex
-																	? "contained"
-																	: "outlined"
-															}
-															size="small"
-															sx={{
-																minWidth: 40,
-																width: 40,
-																height: 40,
-																borderRadius: 2,
-																fontSize: "0.875rem",
-																fontWeight: 500,
-																position: "relative",
-																flexShrink: 0,
-																...(actualIndex === currentQuestionIndex && {
-																	backgroundColor: "primary.main",
-																	color: "primary.contrastText",
-																	"&:hover": {
-																		backgroundColor: "primary.dark",
-																	},
-																}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] !==
-																		undefined && {
-																		backgroundColor: "success.light",
-																		color: "success.dark",
-																		borderColor: "success.light",
-																		"&:hover": {
-																			backgroundColor: "success.main",
-																			borderColor: "success.main",
-																		},
-																	}),
-																...(actualIndex !== currentQuestionIndex &&
-																	answers[questions[actualIndex].id] ===
-																		undefined && {
-																		backgroundColor: "grey.100",
-																		color: "grey.600",
-																		borderColor: "grey.300",
-																		"&:hover": {
-																			backgroundColor: "grey.200",
-																			borderColor: "grey.400",
-																		},
-																	}),
-																...(markedForReview &&
-																	markedForReview[
-																		questions[actualIndex].id
-																	] && {
-																		"&::after": {
-																			content: '"⚠"',
-																			position: "absolute",
-																			top: -4,
-																			right: -4,
-																			fontSize: "24px",
-																			backgroundColor: "warning.main",
-																			color: "red",
-																			borderRadius: "50%",
-																			width: 16,
-																			height: 16,
-																			display: "flex",
-																			alignItems: "center",
-																			justifyContent: "center",
-																		},
-																	}),
-															}}
-														>
-															{actualIndex + 1}
-														</Button>
-													);
-												})}
-											</Box>
-										</Stack>
-
-										<Stack
-											direction={{ md: "row", lg: "row" }}
-											sx={{
-												justifyContent: "space-between",
-												alignItems: "center",
-											}}
-										>
-											<Stack
-												direction={{ md: "row", lg: "row" }}
-												spacing={{ xs: 1, sm: 1, md: 1 }}
-												sx={{
-													justifyContent: "flex-start",
-													alignItems: "flex-end",
-												}}
-											>
-												<Stack direction="row" spacing={1}>
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														SAVE & NEXT
-													</Button>
-													<Button
-														onClick={() => {
-															const newAnswers = { ...answers };
-															delete newAnswers[
-																questions[currentQuestionIndex].id
-															];
-															setAnswers(newAnswers);
-
-															if (
-																markedForReview &&
-																markedForReview[
-																	questions[currentQuestionIndex].id
-																]
-															) {
-																const newMarkedForReview = {
-																	...markedForReview,
-																};
-																delete newMarkedForReview[
-																	questions[currentQuestionIndex].id
-																];
-																setMarkedForReview(newMarkedForReview);
-															}
-														}}
-														size="lg"
-														color="neutral"
-														variant="solid"
-														sx={{ whiteSpace: "nowrap" }}
-													>
-														CLEAR
-													</Button>
-												</Stack>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-													}}
-													size="lg"
-													color="warning"
-													className="swiper-button image-swiper-button-next"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													SAVE & MARK FOR REVIEW
-												</Button>
-												<Button
-													onClick={() => {
-														const newMarkedForReview = {
-															...markedForReview,
-															[questions[currentQuestionIndex].id]: true,
-														};
-														setMarkedForReview(newMarkedForReview);
-
-														const nextIndex = Math.min(
-															questions.length - 1,
-															currentQuestionIndex + 1,
-														);
-														setCurrentQuestionIndex(nextIndex);
-													}}
-													className="swiper-button image-swiper-button-next"
-													size="lg"
-													color="success"
-													sx={{ whiteSpace: "nowrap" }}
-												>
-													MARK FOR REVIEW & NEXT
-												</Button>
-											</Stack>
-
-											<Stack
-												direction="row"
-												spacing={0}
-												sx={{
-													justifyContent: "flex-end",
-													alignItems: "flex-end",
-												}}
-											>
-												<Box
-													sx={{ display: "flex", gap: 2, whiteSpace: "nowrap" }}
-													className="nav-button"
-												>
-													<Button
-														onClick={() =>
-															setCurrentQuestionIndex(
-																Math.max(0, currentQuestionIndex - 1),
-															)
-														}
-														disabled={currentQuestionIndex === 0}
-														className="swiper-button image-swiper-button-prev"
-														size="lg"
-													>
-														<NavigateBeforeIcon />
-														Back
-													</Button>
-
-													<Button
-														onClick={() => {
-															const nextIndex = Math.min(
-																questions.length - 1,
-																currentQuestionIndex + 1,
-															);
-															setCurrentQuestionIndex(nextIndex);
-														}}
-														className="swiper-button image-swiper-button-next"
-														size="lg"
-													>
-														Next
-														<NavigateNextIcon />
-													</Button>
-												</Box>
-											</Stack>
-										</Stack>
-									</Stack>
-								</div>
-							</TabPanel>
-						</Tabs>
-					</Sheet>
-				</Grid>
-				<Grid
-					container
-					direction="column"
-					justifyContent="space-between"
-					alignItems="center"
-					xs={12}
-					sm={2}
-					lg={2}
-				>
-					<Grid xs={12}>
-						<Sheet
-							variant="soft"
-							color="neutral"
-							sx={{
-								borderRadius: "lg",
-							}}
-						>
-							<div>
-								<CustomWebcam />
-							</div>
-						</Sheet>
-						<br />
-						<Sheet
-							variant="soft"
-							color="neutral"
-							sx={{ p: 2, borderRadius: "lg" }}
-						>
-							<span style={{ textAlign: "center" }}>
-								<Typography level="h2">{formatTime(timeLeft)}</Typography>
-							</span>
-						</Sheet>
-					</Grid>
-
-					<UserInfo />
-
-					<Grid xs={12}>
-						<Sheet
-							variant="soft"
-							color="neutral"
-							sx={{ p: 0, borderRadius: "lg" }}
-						>
-							<React.Fragment>
-								<Button fullWidth size="lg" onClick={() => setOpen(true)}>
-									Submit Test
-								</Button>
-								<Modal open={open} onClose={() => setOpen(false)}>
-									<ModalDialog variant="outlined" role="alertdialog">
-										<DialogTitle>
-											<WarningRoundedIcon />
-											Confirmation
-										</DialogTitle>
-										<Divider />
-										<DialogContent>
-											Are you sure you want to quit the test?
-										</DialogContent>
-										<DialogActions>
-											<Button
-												variant="solid"
-												color="danger"
-												onClick={handleSubmit}
-											>
-												Yes
-											</Button>
-
-											<Button
-												variant="plain"
-												color="neutral"
-												onClick={() => setOpen(false)}
-											>
-												Cancel
-											</Button>
-										</DialogActions>
-									</ModalDialog>
-								</Modal>
-							</React.Fragment>
-						</Sheet>
-					</Grid>
-				</Grid>
-			</Grid>
-		</div>
-	);
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
+import { questionsData } from "../../data/questions";
+
+const SECTION_NAMES = [
+  "Section 1",
+  "Section 2",
+  "Section 3",
+  "Section 4",
+];
+
+export default function ExamPage() {
+  const router = useRouter();
+  const { subject } = router.query;
+  const { currentUser, logout } = useAuth();
+
+  // Test State
+  const [questions, setQuestions] = useState([]);
+  const [paperDetails, setPaperDetails] = useState({
+    title: "Winter Project Selection Test",
+    duration: 60,
+    instructions: "",
+  });
+  const [loading, setLoading] = useState(true);
+  const [activeSectionIndex, setActiveSectionIndex] = useState(0); // 0, 1, 2, 3
+  const [currentQuestionId, setCurrentQuestionId] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [markedForReview, setMarkedForReview] = useState({});
+  const [timeLeft, setTimeLeft] = useState(60 * 60);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [instructionChecked, setInstructionChecked] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedUserEmail, setSubmittedUserEmail] = useState("");
+  const [logoutCountdown, setLogoutCountdown] = useState(8);
+  const [submissionResult, setSubmissionResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
+  // Proctoring State
+  const [proctorSnapshots, setProctorSnapshots] = useState([]);
+  const [faceAnomalies, setFaceAnomalies] = useState([]);
+  const webcamRef = useRef(null);
+
+  // 1. Fullscreen Proctor Hook
+  const handleViolationTrigger = useCallback((type, count) => {
+    console.warn(`Fullscreen violation triggered: ${type} (count: ${count})`);
+    if (type === "max_violations_reached") {
+      handleAutoSubmit("Maximum security violations exceeded");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const {
+    isFullscreen,
+    violations,
+    warningMessage,
+    clearWarning,
+    enterFullscreen,
+    violationLogs,
+  } = useFullscreenProctor({
+    maxViolations: 3,
+    enableWarnings: true,
+    enabled: hasStarted && !isSubmitted,
+    onFullscreenViolation: handleViolationTrigger,
+  });
+
+  // 2. Fetch Quiz Questions Dynamically
+  useEffect(() => {
+    if (!currentUser && !isSubmitted) {
+      router.push("/login");
+      return;
+    }
+
+    let isMounted = true;
+    async function fetchQuizData() {
+      setLoading(true);
+
+      try {
+        const queryTarget = subject && subject !== "[subject]" ? subject : "Winter Project Selection Test";
+        const apiRes = await fetch(`/api/quiz/${encodeURIComponent(queryTarget)}`);
+        if (apiRes.ok) {
+          const data = await apiRes.json();
+          if (isMounted && data.questions && data.questions.length > 0) {
+            setQuestions(data.questions);
+            setPaperDetails({
+              title: data.title || "Winter Project Selection Test",
+              duration: data.duration || 60,
+              instructions: data.instructions || "",
+            });
+            setTimeLeft((data.duration || 60) * 60);
+            setCurrentQuestionId(data.questions[0]?.id || 1);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("API route quiz note, checking local fallback:", e);
+      }
+
+      // Fallback to questionsData["Winter Project Selection Test"] or questionsData["Examination"]
+      const defaultQ = questionsData["Winter Project Selection Test"] || questionsData["Examination"] || [];
+      if (isMounted) {
+        setQuestions(defaultQ);
+        setPaperDetails({
+          title: "Winter Project Selection Test",
+          duration: 60,
+          instructions: "This test consists of 4 sections. Answer all questions.",
+        });
+        setTimeLeft(60 * 60);
+        setCurrentQuestionId(defaultQ[0]?.id || 1);
+        setLoading(false);
+      }
+    }
+
+    fetchQuizData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, router]);
+
+  // Group questions by section
+  const sectionQuestionsMap = useMemo(() => {
+    const map = { 0: [], 1: [], 2: [], 3: [] };
+    const qCount = questions.length;
+    const chunkSize = Math.max(1, Math.ceil(qCount / 4));
+
+    questions.forEach((q, idx) => {
+      let secIdx = 0;
+      if (q.sectionIndex !== undefined && q.sectionIndex >= 0 && q.sectionIndex <= 3) {
+        secIdx = q.sectionIndex;
+      } else if (q.section) {
+        const match = q.section.match(/(\d)/);
+        if (match) {
+          secIdx = Math.max(0, Math.min(3, parseInt(match[1], 10) - 1));
+        }
+      } else {
+        secIdx = Math.min(3, Math.floor(idx / chunkSize));
+      }
+      map[secIdx].push(q);
+    });
+
+    return map;
+  }, [questions]);
+
+  // Questions in the currently active section page
+  const currentSectionQuestions = useMemo(() => {
+    return sectionQuestionsMap[activeSectionIndex] || [];
+  }, [sectionQuestionsMap, activeSectionIndex]);
+
+  // When changing section, ensure current question belongs to the active section
+  useEffect(() => {
+    if (currentSectionQuestions.length > 0) {
+      const isCurrentInSec = currentSectionQuestions.some((q) => q.id === currentQuestionId);
+      if (!isCurrentInSec) {
+        setCurrentQuestionId(currentSectionQuestions[0].id);
+      }
+    }
+  }, [activeSectionIndex, currentSectionQuestions, currentQuestionId]);
+
+  // Active question object
+  const currentQ = useMemo(() => {
+    return questions.find((q) => q.id === currentQuestionId) || currentSectionQuestions[0] || {};
+  }, [questions, currentQuestionId, currentSectionQuestions]);
+
+  const currentQSectionIndex = currentSectionQuestions.findIndex((q) => q.id === currentQ.id);
+
+  // 3. Auto-Submit & Countdown Timer
+  const handleAutoSubmit = useCallback((reason) => {
+    handleSubmit(null, reason);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (hasStarted && timeLeft > 0 && !isSubmitted && !loading) {
+      const timer = setTimeout(() => setTimeLeft((prev) => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (hasStarted && timeLeft === 0 && !isSubmitted && !loading) {
+      handleAutoSubmit("Exam time expired");
+    }
+  }, [hasStarted, timeLeft, isSubmitted, loading, handleAutoSubmit]);
+
+  // Logout countdown timer after submission
+  useEffect(() => {
+    if (isSubmitted) {
+      if (logoutCountdown > 0) {
+        const timer = setTimeout(() => {
+          setLogoutCountdown((prev) => prev - 1);
+        }, 1000);
+        return () => clearTimeout(timer);
+      } else {
+        router.push("/login");
+      }
+    }
+  }, [isSubmitted, logoutCountdown, router]);
+
+  const handleAnswerSelect = (questionId, value) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: value,
+    }));
+  };
+
+  const handleClearAnswer = (questionId) => {
+    setAnswers((prev) => {
+      const copy = { ...prev };
+      delete copy[questionId];
+      return copy;
+    });
+  };
+
+  const toggleMarkForReview = (questionId) => {
+    setMarkedForReview((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }));
+  };
+
+  // 4. Secure Score Submission
+  const handleSubmit = async (e, submitReason = "Normal submission") => {
+    if (isSubmitted || submitting) return;
+    setSubmitting(true);
+    setConfirmModalOpen(false);
+
+    const candidateEmail = currentUser?.email || "candidate";
+    setSubmittedUserEmail(candidateEmail);
+
+    const totalQ = questions.length;
+    const allViolations = [
+      ...violationLogs,
+      ...faceAnomalies,
+      ...(submitReason !== "Normal submission"
+        ? [{ type: "auto_submit", details: submitReason, timestamp: new Date().toISOString() }]
+        : []),
+    ];
+
+    const exitFullscreenHelper = async () => {
+      if (typeof document !== "undefined" && (document.fullscreenElement || document.webkitFullscreenElement)) {
+        try {
+          if (document.exitFullscreen) await document.exitFullscreen();
+          else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    const performCandidateLogout = async () => {
+      try {
+        if (logout) {
+          await logout();
+        }
+      } catch (logoutErr) {
+        console.warn("Logout error after submit:", logoutErr);
+      }
+    };
+
+    try {
+      const res = await fetch("/api/quiz/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser?.uid || "candidate",
+          userEmail: candidateEmail,
+          subject: paperDetails.title || "Examination",
+          answers,
+          violations: violations + faceAnomalies.length,
+          violationDetails: allViolations,
+          proctorSnapshots: proctorSnapshots.slice(0, 20),
+        }),
+      });
+
+      if (res.ok) {
+        const resultData = await res.json();
+        setSubmissionResult(resultData);
+        setIsSubmitted(true);
+        setSubmitting(false);
+
+        await exitFullscreenHelper();
+        await performCandidateLogout();
+        return;
+      }
+    } catch (apiErr) {
+      console.warn("API submit failed, falling back to local evaluation:", apiErr);
+    }
+
+    // Fallback if offline
+    let localScore = 0;
+    questions.forEach((q) => {
+      const userAns = answers[q.id];
+      if (userAns !== undefined && userAns !== null) {
+        if (q.type === "integer") {
+          if (parseInt(userAns, 10) === parseInt(q.correctAnswer, 10)) localScore++;
+        } else {
+          if (Number(userAns) === Number(q.correctAnswer)) localScore++;
+        }
+      }
+    });
+
+    setSubmissionResult({
+      totalQuestions: totalQ,
+      violations: violations + faceAnomalies.length,
+      submitted: true,
+    });
+    setIsSubmitted(true);
+    setSubmitting(false);
+
+    await exitFullscreenHelper();
+    await performCandidateLogout();
+  };
+
+  const handleFaceAnomaly = useCallback((anomaly) => {
+    setFaceAnomalies((prev) => [
+      ...prev,
+      { ...anomaly, timestamp: new Date().toISOString() },
+    ]);
+  }, []);
+
+  const handleSnapshotUploaded = useCallback((url) => {
+    setProctorSnapshots((prev) => [...prev, url]);
+  }, []);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  if ((!currentUser && !isSubmitted) || loading) {
+    return (
+      <Box
+        display="flex"
+        flexDirection="column"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="70vh"
+        gap={2}
+      >
+        <CircularProgress size="lg" />
+        <Typography level="title-md">Loading Examination Sections...</Typography>
+      </Box>
+    );
+  }
+
+  // 1. Pre-Examination Instructions View (Before Test Starts)
+  if (!hasStarted) {
+    return (
+      <Box sx={{ maxWidth: 850, mx: "auto", my: { xs: 2, md: 5 }, p: { xs: 2, md: 3 } }}>
+        <Card variant="outlined" sx={{ p: { xs: 3, md: 4 }, borderRadius: "lg", boxShadow: "md" }}>
+          <Box display="flex" alignItems="center" gap={2} sx={{ mb: 2 }}>
+            <img
+              src="/share-logo.jpg"
+              alt="ShARE: Student Chapter"
+              width="50"
+              height="50"
+              style={{ borderRadius: "10px", objectFit: "cover" }}
+            />
+            <div>
+              <Typography level="h1" sx={{ fontWeight: "bold", fontSize: "1.65rem" }}>
+                Winter Project Selection Test
+              </Typography>
+              <Typography level="body-sm" color="neutral">
+                ShARE: Student Chapter | Candidate: <b>{currentUser?.email}</b>
+              </Typography>
+            </div>
+          </Box>
+          <Divider sx={{ my: 2 }} />
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid xs={6} sm={3}>
+              <Sheet variant="soft" color="primary" sx={{ p: 2, borderRadius: "md", textAlign: "center" }}>
+                <Typography level="body-xs">Total Duration</Typography>
+                <Typography level="title-lg" fontWeight="bold">
+                  {paperDetails.duration || 60} Mins
+                </Typography>
+              </Sheet>
+            </Grid>
+            <Grid xs={6} sm={3}>
+              <Sheet variant="soft" color="success" sx={{ p: 2, borderRadius: "md", textAlign: "center" }}>
+                <Typography level="body-xs">Total Questions</Typography>
+                <Typography level="title-lg" fontWeight="bold">
+                  {questions.length}
+                </Typography>
+              </Sheet>
+            </Grid>
+            <Grid xs={6} sm={3}>
+              <Sheet variant="soft" color="warning" sx={{ p: 2, borderRadius: "md", textAlign: "center" }}>
+                <Typography level="body-xs">Sections</Typography>
+                <Typography level="title-lg" fontWeight="bold">
+                  4 Sections
+                </Typography>
+              </Sheet>
+            </Grid>
+            <Grid xs={6} sm={3}>
+              <Sheet variant="soft" color="danger" sx={{ p: 2, borderRadius: "md", textAlign: "center" }}>
+                <Typography level="body-xs">Max Violations</Typography>
+                <Typography level="title-lg" fontWeight="bold">
+                  3 Violations
+                </Typography>
+              </Sheet>
+            </Grid>
+          </Grid>
+
+          <Typography level="title-md" sx={{ fontWeight: "bold", mb: 1.5 }}>
+            Guidelines & System Rules:
+          </Typography>
+
+          <Sheet
+            variant="soft"
+            color="neutral"
+            sx={{ p: 3, borderRadius: "md", mb: 3, maxHeight: 300, overflowY: "auto" }}
+          >
+            <Stack spacing={2}>
+              <Box>
+                <Typography level="title-sm" fontWeight="bold" color="primary">
+                  1. 4 Structured Sections
+                </Typography>
+                <Typography level="body-sm" sx={{ mt: 0.5 }}>
+                  This test consists of 4 distinct sections. Use the top navigation tabs to switch between sections.
+                  Sections 1, 2, and 3 are Multiple Choice. Section 4 consists of Numerical / Integer type questions where you type your numeric answer directly.
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography level="title-sm" fontWeight="bold" color="primary">
+                  2. Mandatory Fullscreen Mode
+                </Typography>
+                <Typography level="body-sm" sx={{ mt: 0.5 }}>
+                  Clicking &quot;Start Test &amp; Enter Fullscreen&quot; will lock the test into fullscreen mode. Exiting fullscreen, minimizing the browser, or switching tabs is strictly prohibited and counts as an integrity violation.
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography level="title-sm" fontWeight="bold" color="primary">
+                  3. Webcam & AI Proctoring
+                </Typography>
+                <Typography level="body-sm" sx={{ mt: 0.5 }}>
+                  Your webcam will activate and monitor your presence throughout the exam. Please remain centered and clearly visible.
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography level="title-sm" fontWeight="bold" color="primary">
+                  4. Security Limit & Auto-Submit
+                </Typography>
+                <Typography level="body-sm" sx={{ mt: 0.5 }}>
+                  If you accumulate 3 security violations or when the timer reaches 00:00, your exam will be automatically locked and submitted.
+                </Typography>
+              </Box>
+            </Stack>
+          </Sheet>
+
+          {/* Agreement Checkbox */}
+          <Sheet
+            variant="outlined"
+            color={instructionChecked ? "success" : "neutral"}
+            sx={{ p: 2, borderRadius: "md", mb: 3 }}
+          >
+            <Checkbox
+              checked={instructionChecked}
+              onChange={(e) => setInstructionChecked(e.target.checked)}
+              label={
+                <Typography level="body-sm" fontWeight="semibold">
+                  I have read and agree to all the examination rules. I confirm my camera is functional and declare I will not use any unauthorized materials.
+                </Typography>
+              }
+            />
+          </Sheet>
+
+          <Button
+            size="lg"
+            variant="solid"
+            color="primary"
+            disabled={!instructionChecked}
+            startDecorator={<Fullscreen />}
+            onClick={async () => {
+              try {
+                await enterFullscreen();
+              } catch (e) {
+                console.warn(e);
+              }
+              setHasStarted(true);
+            }}
+            sx={{ py: 1.5, fontWeight: "bold" }}
+          >
+            Start Test & Enter Fullscreen
+          </Button>
+        </Card>
+      </Box>
+    );
+  }
+
+  // 2. Submitted Confirmation View (CANDIDATE LOGGED OUT & NO SCORE SHOWN)
+  if (isSubmitted) {
+    const total = submissionResult?.totalQuestions || questions.length || 1;
+    const attemptedCount = Object.keys(answers).length;
+    const unattemptedCount = Math.max(0, total - attemptedCount);
+    const totalViolations = submissionResult?.violations ?? violations;
+    const displayEmail = submittedUserEmail || currentUser?.email || "Submitted Candidate";
+
+    return (
+      <Box sx={{ maxWidth: "42rem", mx: "auto", my: 6, p: 2 }}>
+        <Card variant="outlined" sx={{ p: 4, textAlign: "center", boxShadow: "lg", borderRadius: "lg" }}>
+          <Box display="flex" justifyContent="center" mb={1.5}>
+            <img
+              src="/share-logo.jpg"
+              alt="ShARE: Student Chapter"
+              width="60"
+              height="60"
+              style={{ borderRadius: "12px", objectFit: "cover" }}
+            />
+          </Box>
+          <CheckCircle sx={{ fontSize: 56, color: "success.500", mx: "auto", mb: 1 }} />
+          <Typography level="h1" sx={{ mb: 1, fontWeight: "bold" }}>
+            Winter Project Selection Test Submitted
+          </Typography>
+          <Box display="flex" justifyContent="center" alignItems="center" gap={1} sx={{ mb: 3 }}>
+            <Chip size="md" variant="soft" color="success" startDecorator={<Lock fontSize="small" />}>
+              Candidate Logged Out &amp; Session Ended
+            </Chip>
+          </Box>
+          <Typography level="body-md" color="neutral" sx={{ mb: 3 }}>
+            Paper: <b>{paperDetails.title || "Winter Project Selection Test"}</b> (All 4 Sections Finished)
+          </Typography>
+
+          <Sheet variant="soft" color="neutral" sx={{ p: 3, borderRadius: "md", mb: 3, textAlign: "left" }}>
+            <Stack spacing={1.5}>
+              <Box display="flex" justifyContent="space-between">
+                <Typography level="body-sm" color="neutral">Candidate ID:</Typography>
+                <Typography level="body-sm" fontWeight="bold">{displayEmail}</Typography>
+              </Box>
+              <Divider />
+              <Box display="flex" justifyContent="space-between">
+                <Typography level="body-sm" color="neutral">Total Questions:</Typography>
+                <Typography level="body-sm" fontWeight="bold">{total}</Typography>
+              </Box>
+              <Box display="flex" justifyContent="space-between">
+                <Typography level="body-sm" color="neutral">Questions Attempted:</Typography>
+                <Typography level="body-sm" fontWeight="bold" color="success.600">{attemptedCount}</Typography>
+              </Box>
+              <Box display="flex" justifyContent="space-between">
+                <Typography level="body-sm" color="neutral">Unattempted Questions:</Typography>
+                <Typography level="body-sm" fontWeight="bold">{unattemptedCount}</Typography>
+              </Box>
+              <Box display="flex" justifyContent="space-between">
+                <Typography level="body-sm" color="neutral">Proctoring Status:</Typography>
+                <Chip size="sm" variant="soft" color={totalViolations > 0 ? "warning" : "success"}>
+                  {totalViolations === 0 ? "Verified (Clean)" : `${totalViolations} Violation(s) Logged`}
+                </Chip>
+              </Box>
+            </Stack>
+          </Sheet>
+
+          <Alert color="success" variant="soft" sx={{ mb: 4, textAlign: "left" }}>
+            Your responses have been securely recorded and locked. To maintain examination integrity, your candidate session has been officially ended and you have been logged out.
+          </Alert>
+
+          <Button
+            size="lg"
+            variant="solid"
+            color="primary"
+            onClick={() => router.push("/login")}
+            sx={{ minWidth: 240, mx: "auto" }}
+          >
+            Exit to Login Now ({logoutCountdown}s)
+          </Button>
+        </Card>
+      </Box>
+    );
+  }
+
+  const isIntegerType = currentQ.type === "integer" || !currentQ.options || currentQ.options.length === 0;
+
+  return (
+    <Box
+      sx={{
+        p: { xs: 1, md: 2 },
+        userSelect: "none",
+        WebkitUserSelect: "none",
+      }}
+      onCopy={(e) => e.preventDefault()}
+      onCut={(e) => e.preventDefault()}
+      onPaste={(e) => e.preventDefault()}
+    >
+      {/* Security Warning Modal */}
+      <Modal open={!!warningMessage} onClose={clearWarning}>
+        <ModalDialog variant="outlined" color="danger" role="alertdialog">
+          <DialogTitle>
+            <WarningRounded sx={{ color: "danger.500" }} /> Security Alert
+          </DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Typography level="body-md">{warningMessage}</Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              variant="solid"
+              color="danger"
+              onClick={() => {
+                clearWarning();
+                enterFullscreen();
+              }}
+            >
+              I Understand & Resume
+            </Button>
+          </DialogActions>
+        </ModalDialog>
+      </Modal>
+
+      {/* Confirmation to Submit Modal */}
+      <Modal open={confirmModalOpen} onClose={() => setConfirmModalOpen(false)}>
+        <ModalDialog variant="outlined" role="alertdialog">
+          <DialogTitle>
+            <WarningRounded /> Submit Selection Test
+          </DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Typography level="body-md">
+              Are you sure you want to finish and submit the Winter Project Selection Test?
+              <br />
+              Answered: <b>{Object.keys(answers).length}</b> of <b>{questions.length}</b> questions across all 4 sections.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              variant="solid"
+              color="danger"
+              loading={submitting}
+              onClick={(e) => handleSubmit(e, "Student confirmed submission")}
+            >
+              Yes, Submit Test
+            </Button>
+            <Button
+              variant="plain"
+              color="neutral"
+              onClick={() => setConfirmModalOpen(false)}
+            >
+              Continue Test
+            </Button>
+          </DialogActions>
+        </ModalDialog>
+      </Modal>
+
+      {/* Fullscreen Alert Banner if not in fullscreen */}
+      {!isFullscreen && (
+        <Alert
+          color="warning"
+          variant="soft"
+          sx={{ mb: 2 }}
+          startDecorator={<Fullscreen />}
+          endDecorator={
+            <Button size="sm" variant="solid" color="warning" onClick={enterFullscreen}>
+              Enter Fullscreen
+            </Button>
+          }
+        >
+          Proctoring Rule: You must stay in Fullscreen mode during the test.
+        </Alert>
+      )}
+
+      {/* Top 4 Section Page Selector Tabs */}
+      <Sheet variant="outlined" sx={{ p: 1, mb: 2, borderRadius: "lg" }}>
+        <Tabs
+          value={activeSectionIndex}
+          onChange={(e, val) => setActiveSectionIndex(val)}
+          sx={{ bgcolor: "transparent" }}
+        >
+          <TabList
+            tabFlex={1}
+            sx={{
+              [`&& .${tabClasses.root}`]: {
+                fontWeight: 600,
+                fontSize: { xs: "0.85rem", md: "1rem" },
+                py: 1,
+              },
+            }}
+          >
+            {SECTION_NAMES.map((secName, secIdx) => {
+              const qCount = (sectionQuestionsMap[secIdx] || []).length;
+              return (
+                <Tab key={secIdx} value={secIdx}>
+                  <Layers fontSize="small" sx={{ mr: 1, display: { xs: "none", sm: "inline-block" } }} />
+                  {secName} ({qCount} Qs)
+                </Tab>
+              );
+            })}
+          </TabList>
+        </Tabs>
+      </Sheet>
+
+      <Grid container spacing={2}>
+        {/* Main Section Question Interface */}
+        <Grid xs={12} sm={9} lg={9}>
+          <Sheet
+            variant="soft"
+            color="neutral"
+            sx={{
+              borderRadius: "lg",
+              p: { xs: 2, md: 3 },
+              minHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
+          >
+            <Box>
+              {/* Question Header & Chips */}
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: 2 }}
+              >
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Chip size="md" variant="solid" color="primary">
+                    {SECTION_NAMES[activeSectionIndex]}
+                  </Chip>
+                  <Typography level="title-md">
+                    Question {currentQSectionIndex + 1} of {currentSectionQuestions.length}
+                  </Typography>
+                </Box>
+
+                <Stack direction="row" spacing={1}>
+                  <Chip
+                    size="sm"
+                    variant="soft"
+                    color={isIntegerType ? "warning" : "neutral"}
+                    startDecorator={isIntegerType ? <Numbers fontSize="small" /> : <ListAlt fontSize="small" />}
+                  >
+                    {isIntegerType ? "Integer Type" : "Multiple Choice"}
+                  </Chip>
+
+                  {markedForReview[currentQ.id] && (
+                    <Chip size="sm" color="warning" variant="solid" startDecorator={<Bookmark />}>
+                      Marked
+                    </Chip>
+                  )}
+
+                  {answers[currentQ.id] !== undefined && answers[currentQ.id] !== "" ? (
+                    <Chip size="sm" color="success" variant="soft">
+                      Answered
+                    </Chip>
+                  ) : (
+                    <Chip size="sm" color="neutral" variant="soft">
+                      Unanswered
+                    </Chip>
+                  )}
+                </Stack>
+              </Box>
+
+              {/* Question Text */}
+              <Typography level="h3" sx={{ mb: 3, fontWeight: 500, fontSize: "1.25rem" }}>
+                {currentQ.question || "No question available in this section."}
+              </Typography>
+
+              {/* Optional Question Image */}
+              {currentQ.image && (
+                <Box sx={{ textAlign: "center", mb: 3 }}>
+                  <img
+                    src={currentQ.image}
+                    alt="Question Diagram"
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "260px",
+                      objectFit: "contain",
+                      borderRadius: "8px",
+                      border: "1px solid #ddd",
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                </Box>
+              )}
+
+              {/* QUESTION INPUT: INTEGER TYPE VS MCQ */}
+              {isIntegerType ? (
+                <Box
+                  sx={{
+                    my: 3,
+                    p: 2.5,
+                    bgcolor: "background.surface",
+                    border: "2px dashed",
+                    borderColor: "primary.300",
+                    borderRadius: "md",
+                  }}
+                >
+                  <Typography level="title-sm" sx={{ mb: 1 }}>
+                    Numerical / Integer Input:
+                  </Typography>
+                  <Typography level="body-xs" color="neutral" sx={{ mb: 1.5 }}>
+                    Enter an integer value (positive or negative number).
+                  </Typography>
+                  <Input
+                    type="number"
+                    step="1"
+                    placeholder="Type your integer answer here..."
+                    value={answers[currentQ.id] !== undefined ? answers[currentQ.id] : ""}
+                    onChange={(e) => handleAnswerSelect(currentQ.id, e.target.value)}
+                    size="lg"
+                    sx={{
+                      maxWidth: 320,
+                      fontSize: "1.3rem",
+                      fontWeight: "bold",
+                      fontFamily: "monospace",
+                    }}
+                  />
+                </Box>
+              ) : (
+                <Stack spacing={1.5} sx={{ mb: 4 }}>
+                  {(currentQ.options || []).map((optText, optIdx) => {
+                    const isSelected = answers[currentQ.id] === optIdx;
+                    return (
+                      <Box
+                        key={optIdx}
+                        onClick={() => handleAnswerSelect(currentQ.id, optIdx)}
+                        sx={{
+                          p: 1.5,
+                          px: 2,
+                          borderRadius: "md",
+                          border: "2px solid",
+                          borderColor: isSelected ? "primary.500" : "neutral.300",
+                          bgcolor: isSelected ? "primary.softBg" : "background.surface",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Radio
+                          checked={isSelected}
+                          onChange={() => handleAnswerSelect(currentQ.id, optIdx)}
+                          value={optIdx}
+                          name={`question-${currentQ.id}`}
+                          label={
+                            <Typography level="body-md" sx={{ fontWeight: isSelected ? 600 : 400 }}>
+                              {String.fromCharCode(65 + optIdx)}. {optText}
+                            </Typography>
+                          }
+                        />
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Box>
+
+            {/* Bottom Question Palette & Controls */}
+            <Box>
+              <Divider sx={{ my: 2 }} />
+
+              {/* Section-specific question number pills */}
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 0.8,
+                  overflowX: "auto",
+                  pb: 1.5,
+                  mb: 2,
+                  "&::-webkit-scrollbar": { height: 6 },
+                  "&::-webkit-scrollbar-thumb": { bgcolor: "neutral.400", borderRadius: 3 },
+                }}
+              >
+                {currentSectionQuestions.map((q, idx) => {
+                  const isCurrent = q.id === currentQ.id;
+                  const isAns = answers[q.id] !== undefined && answers[q.id] !== "";
+                  const isRev = markedForReview[q.id];
+
+                  let variant = "outlined";
+                  let color = "neutral";
+                  if (isCurrent) {
+                    variant = "solid";
+                    color = "primary";
+                  } else if (isRev) {
+                    variant = "solid";
+                    color = "warning";
+                  } else if (isAns) {
+                    variant = "soft";
+                    color = "success";
+                  }
+
+                  return (
+                    <Button
+                      key={q.id || idx}
+                      size="sm"
+                      variant={variant}
+                      color={color}
+                      onClick={() => setCurrentQuestionId(q.id)}
+                      sx={{
+                        minWidth: 36,
+                        height: 36,
+                        p: 0,
+                        flexShrink: 0,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {idx + 1}
+                    </Button>
+                  );
+                })}
+              </Box>
+
+              {/* Action Buttons */}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems="center"
+                spacing={1.5}
+              >
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    color="neutral"
+                    startDecorator={<BookmarkBorder />}
+                    onClick={() => toggleMarkForReview(currentQ.id)}
+                  >
+                    {markedForReview[currentQ.id] ? "Unmark Review" : "Mark for Review"}
+                  </Button>
+                  {answers[currentQ.id] !== undefined && answers[currentQ.id] !== "" && (
+                    <Button
+                      variant="plain"
+                      color="danger"
+                      onClick={() => handleClearAnswer(currentQ.id)}
+                    >
+                      Clear Answer
+                    </Button>
+                  )}
+                </Stack>
+
+                <Stack direction="row" spacing={1}>
+                  {/* Previous Question in Section */}
+                  <Button
+                    variant="outlined"
+                    color="neutral"
+                    disabled={currentQSectionIndex <= 0}
+                    startDecorator={<NavigateBefore />}
+                    onClick={() => {
+                      if (currentQSectionIndex > 0) {
+                        setCurrentQuestionId(currentSectionQuestions[currentQSectionIndex - 1].id);
+                      }
+                    }}
+                  >
+                    Previous
+                  </Button>
+
+                  {/* Next Question in Section */}
+                  {currentQSectionIndex < currentSectionQuestions.length - 1 ? (
+                    <Button
+                      variant="solid"
+                      color="primary"
+                      endDecorator={<NavigateNext />}
+                      onClick={() => {
+                        setCurrentQuestionId(currentSectionQuestions[currentQSectionIndex + 1].id);
+                      }}
+                    >
+                      Next
+                    </Button>
+                  ) : activeSectionIndex < 3 ? (
+                    /* Next Section Page Button */
+                    <Button
+                      variant="solid"
+                      color="warning"
+                      endDecorator={<NavigateNext />}
+                      onClick={() => {
+                        setActiveSectionIndex((prev) => Math.min(3, prev + 1));
+                      }}
+                    >
+                      Go to {SECTION_NAMES[activeSectionIndex + 1]} ➡️
+                    </Button>
+                  ) : (
+                    /* Last section -> Submit button */
+                    <Button
+                      variant="solid"
+                      color="danger"
+                      onClick={() => setConfirmModalOpen(true)}
+                    >
+                      Submit Exam
+                    </Button>
+                  )}
+                </Stack>
+              </Stack>
+            </Box>
+          </Sheet>
+        </Grid>
+
+        {/* Side Panel: Webcam, Timer, Profile & Submit */}
+        <Grid xs={12} sm={3} lg={3}>
+          <Stack spacing={2}>
+            {/* Live Camera & Face Tracking Component */}
+            <Sheet variant="soft" color="neutral" sx={{ p: 1.5, borderRadius: "lg" }}>
+              <CustomWebcam
+                ref={webcamRef}
+                examSubject={paperDetails.title || "Examination"}
+                userId={currentUser.uid}
+                onFaceAnomaly={handleFaceAnomaly}
+                onSnapshotUploaded={handleSnapshotUploaded}
+                enableSnapshots={true}
+              />
+            </Sheet>
+
+            {/* Timer */}
+            <Sheet
+              variant="soft"
+              color={timeLeft < 300 ? "danger" : "neutral"}
+              sx={{ p: 2, borderRadius: "lg", textAlign: "center" }}
+            >
+              <Typography level="body-xs" color="neutral">
+                EXAM TIME REMAINING
+              </Typography>
+              <Typography level="h1" sx={{ fontWeight: "bold", fontFamily: "monospace" }}>
+                {formatTime(timeLeft)}
+              </Typography>
+            </Sheet>
+
+            {/* Security Status Box */}
+            <Sheet variant="soft" color="neutral" sx={{ p: 1.5, borderRadius: "lg" }}>
+              <Stack spacing={1}>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography level="title-sm" startDecorator={<Security fontSize="small" />}>
+                    Violations:
+                  </Typography>
+                  <Chip
+                    size="sm"
+                    color={violations === 0 ? "success" : violations < 3 ? "warning" : "danger"}
+                    variant="solid"
+                  >
+                    {violations} / 3 Max
+                  </Chip>
+                </Box>
+                <Typography level="body-xs" color="neutral">
+                  Tab-switches, window blur, and exiting fullscreen are recorded.
+                </Typography>
+              </Stack>
+            </Sheet>
+
+            {/* User Candidate Profile */}
+            <UserInfo />
+
+            {/* Finish & Submit Button */}
+            <Button
+              fullWidth
+              size="lg"
+              color="danger"
+              variant="solid"
+              onClick={() => setConfirmModalOpen(true)}
+            >
+              Finish & Submit Test
+            </Button>
+          </Stack>
+        </Grid>
+      </Grid>
+    </Box>
+  );
 }

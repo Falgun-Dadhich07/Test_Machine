@@ -1,0 +1,14 @@
+[
+  {
+    "email": "student001@example.com",
+    "password": "Password123!",
+    "username": "Student One",
+    "roleNumber": "100001"
+  },
+  {
+    "email": "student002@example.com",
+    "password": "Password123!",
+    "username": "Student Two",
+    "roleNumber": "100002"
+  }
+]

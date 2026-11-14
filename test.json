@@ -1,18 +1,9 @@
 {
-	"subjects": {
-		"a": "Physics",
-		"aicon": "../1.svg",
-		"b": "Chemistry",
-		"bicon": "../2.svg",
-		"c": "Mathematics",
-		"cicon": "../3.svg",
-		"d": "Botany",
-		"dicon": "../4.svg",
-		"e": "Geography",
-		"eicon": "../5.svg",
-		"f": "Reasoning",
-		"ficon": "../6.svg",
-		"g": "Computer",
-		"gicon": "../7.svg"
-	}
+  "testName": "Winter Project Selection Test",
+  "sections": [
+    { "id": "sec1", "title": "Section 1", "icon": "../1.svg" },
+    { "id": "sec2", "title": "Section 2", "icon": "../2.svg" },
+    { "id": "sec3", "title": "Section 3", "icon": "../3.svg" },
+    { "id": "sec4", "title": "Section 4", "icon": "../4.svg" }
+  ]
 }

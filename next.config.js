@@ -2,16 +2,10 @@
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
-  output: 'export',
- 
-  // Optional: Change links `/me` -> `/me/` and emit `/me.html` -> `/me/index.html`
-  // trailingSlash: true,
- 
-  // Optional: Prevent automatic `/me` -> `/me/`, instead preserve `href`
-  // skipTrailingSlashRedirect: true,
- 
-  // Optional: Change the output directory `out` -> `dist`
-  // distDir: 'dist',
-}
- 
-module.exports = nextConfig
+  // If static export is explicitly requested (e.g. for pure Firebase static hosting), enable 'export'.
+  // Otherwise default to standard Next.js mode supporting API routes (for Vercel, Node.js server, etc.)
+  ...(process.env.STATIC_EXPORT === "true" ? { output: "export" } : {}),
+  reactStrictMode: true,
+};
+
+module.exports = nextConfig;

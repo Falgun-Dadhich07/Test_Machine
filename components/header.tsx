@@ -31,10 +31,20 @@ export default function Header() {
         alignItems="center"
         spacing={0}
       >
-        <div style={{ display: "flex" }}>
-          <img src="/icon.svg" width="40" height="40" />
-          <Typography level="h1" className="tab_title">
-            Open Proctor
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <img
+            src="/share-logo.jpg"
+            width="42"
+            height="42"
+            style={{ borderRadius: "8px", objectFit: "cover" }}
+            alt="ShARE: Student Chapter"
+          />
+          <Typography
+            level="h1"
+            className="tab_title"
+            sx={{ fontWeight: "bold", fontSize: "1.35rem", letterSpacing: "0.5px" }}
+          >
+            ShARE: Student Chapter
           </Typography>
         </div>
       </Stack>
@@ -50,11 +60,6 @@ export default function Header() {
         }}
       >
         <ColorSchemeToggle />
-        <Link href="/instructions">
-          <Button variant="solid" size="lg">
-            Instructions
-          </Button>
-        </Link>
         <Link href="/login">
           <Button variant="solid" size="lg" sx={{ ml: 1 }}>
             Log Out

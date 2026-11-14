@@ -7,13 +7,15 @@ import FormControl from "@mui/joy/FormControl";
 import FormLabel from "@mui/joy/FormLabel";
 import Input from "@mui/joy/Input";
 import Button from "@mui/joy/Button";
-import Link from "next/link";
 import Stack from "@mui/joy/Stack";
+import Alert from "@mui/joy/Alert";
+import Chip from "@mui/joy/Chip";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useRouter } from "next/router";
+import { Lock, Security, Warning } from "@mui/icons-material";
 
-export default function LoginFinal() {
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -27,75 +29,132 @@ export default function LoginFinal() {
     try {
       setError("");
       setLoading(true);
-      await login(email, password);
+      await login(email.trim(), password);
       router.push("/dashboard");
-    } catch (error) {
-      setError("Failed to log in: " + error.message);
+    } catch (err) {
+      console.error("Login error:", err);
+      if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
+        setError("Invalid credentials. Only pre-registered candidate accounts may access the Winter Project Selection Test.");
+      } else {
+        setError(err.message || "Failed to log in. Please verify your credentials.");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
+
   return (
     <main>
       <CssBaseline />
       <Sheet
         sx={{
-          width: 320,
+          width: { xs: "90%", sm: 400 },
           mx: "auto",
-          my: 4,
-          py: 3,
-          px: 2,
+          my: { xs: 4, md: 8 },
+          py: 4,
+          px: { xs: 2.5, sm: 3.5 },
           display: "flex",
           flexDirection: "column",
-          gap: 2,
-          borderRadius: "lg",
+          gap: 2.5,
+          borderRadius: "xl",
+          bgcolor: "background.surface",
+          borderColor: "neutral.200",
           boxShadow: "lg",
         }}
-        variant="soft"
+        variant="outlined"
       >
-        <div>
-          <Typography level="h4" component="h1">
-            <b>Welcome!</b>
+        <Box sx={{ textAlign: "center" }}>
+          <Box display="flex" justifyContent="center" mb={1.5}>
+            <img
+              src="/share-logo.jpg"
+              alt="ShARE: Student Chapter"
+              width="64"
+              height="64"
+              style={{
+                borderRadius: "12px",
+                objectFit: "cover",
+                boxShadow: "0 4px 14px rgba(0, 168, 89, 0.35)",
+              }}
+            />
+          </Box>
+          <Box display="flex" justifyContent="center" mb={1}>
+            <Chip
+              variant="soft"
+              color="primary"
+              size="sm"
+              startDecorator={<Security fontSize="small" />}
+            >
+              ShARE: Student Chapter
+            </Chip>
+          </Box>
+          <Typography level="h3" component="h1" fontWeight="bold">
+            Winter Project Selection Test
           </Typography>
-          {error && <div>{error}</div>}
-          <Typography level="body-sm">Sign in to continue.</Typography>
-        </div>
-        <Stack sx={{ gap: 4, mt: 0 }}>
-          <form onSubmit={handleSubmit}>
+          <Typography level="body-sm" color="neutral" sx={{ mt: 0.5 }}>
+            Sign in with your assigned candidate credentials.
+          </Typography>
+        </Box>
+
+        {error && (
+          <Alert color="danger" variant="soft" startDecorator={<Warning />}>
+            {error}
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <Stack spacing={2}>
             <FormControl required>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Registered Email Address</FormLabel>
               <Input
-              
                 type="email"
+                placeholder="candidate@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </FormControl>
+
             <FormControl required>
               <FormLabel>Password</FormLabel>
               <Input
-             
                 type="password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </FormControl>
-            <Typography level="body-sm">
-              Don&apos;t have an account? <Link href="/signup">Sign up</Link>
-            </Typography>
-            <Stack sx={{ gap: 4, mt: 2 }}>
-              <Button
-                disabled={loading}
-                type="submit"
-                className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
-              >
-                {loading ? "Logging in..." : "Log In"}
-              </Button>
-            </Stack>
-          </form>
-        </Stack>
+
+            <Button
+              disabled={loading}
+              loading={loading}
+              type="submit"
+              size="lg"
+              color="primary"
+              variant="solid"
+              startDecorator={<Lock />}
+              sx={{ mt: 1, borderRadius: "md" }}
+            >
+              Sign In to Exam
+            </Button>
+          </Stack>
+        </form>
+
+        <Box sx={{ mt: 1, p: 1.5, bgcolor: "neutral.100", borderRadius: "md", textAlign: "center" }}>
+          <Typography level="body-xs" color="neutral">
+            🔒 <b>Restricted Exam Access:</b> Public self-registration is closed. Only pre-authorized candidate accounts can access this portal.
+          </Typography>
+        </Box>
       </Sheet>
     </main>
+  );
+}
+
+// Minimal Box helper in case Joy UI Box is used
+function Box({ children, sx, ...props }) {
+  return (
+    <div style={{ ...sx }} {...props}>
+      {children}
+    </div>
   );
 }

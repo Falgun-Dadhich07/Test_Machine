@@ -12,144 +12,212 @@ import {
   Textarea,
   Typography,
   IconButton,
-  Divider,
-  Stack
+  Radio,
+  RadioGroup,
+  Stack,
+  Chip
 } from '@mui/joy';
-import { Add, Delete } from '@mui/icons-material';
+import { Add, Delete, Numbers, ListAlt } from '@mui/icons-material';
 
 export default function QuestionForm({ onAddQuestion }) {
-  const [question, setQuestion] = useState({
-    question: '',
-    image: '',
-    options: ['', '', '', ''],
-    correctAnswer: 0,
-    subject: 'Demo Test'
-  });
+  const [questionType, setQuestionType] = useState('mcq'); // 'mcq' | 'integer'
+  const [section, setSection] = useState('Section 1');
+  const [questionText, setQuestionText] = useState('');
+  const [image, setImage] = useState('');
+  const [options, setOptions] = useState(['', '', '', '']);
+  const [correctOptionIndex, setCorrectOptionIndex] = useState(0);
+  const [integerAnswer, setIntegerAnswer] = useState('');
 
   const handleOptionChange = (index, value) => {
-    const newOptions = [...question.options];
-    newOptions[index] = value;
-    setQuestion({ ...question, options: newOptions });
+    const updated = [...options];
+    updated[index] = value;
+    setOptions(updated);
   };
 
   const addOption = () => {
-    setQuestion({
-      ...question,
-      options: [...question.options, '']
-    });
+    if (options.length < 6) {
+      setOptions([...options, '']);
+    }
   };
 
   const removeOption = (index) => {
-    if (question.options.length > 2) {
-      const newOptions = question.options.filter((_, i) => i !== index);
-      setQuestion({
-        ...question,
-        options: newOptions,
-        correctAnswer: question.correctAnswer >= newOptions.length ? 0 : question.correctAnswer
-      });
+    if (options.length > 2) {
+      const updated = options.filter((_, i) => i !== index);
+      setOptions(updated);
+      if (correctOptionIndex >= updated.length) {
+        setCorrectOptionIndex(0);
+      }
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (question.question.trim() && question.options.every(opt => opt.trim())) {
+    if (!questionText.trim()) return;
+
+    if (questionType === 'mcq') {
+      const validOptions = options.map(o => o.trim()).filter(Boolean);
+      if (validOptions.length < 2) {
+        alert('Multiple choice questions require at least 2 options.');
+        return;
+      }
+
       onAddQuestion({
-        ...question,
         id: Date.now(),
-        options: question.options.filter(opt => opt.trim())
+        section: section,
+        type: 'mcq',
+        question: questionText.trim(),
+        image: image.trim(),
+        options: validOptions,
+        correctAnswer: Math.min(correctOptionIndex, validOptions.length - 1),
       });
-      setQuestion({
-        question: '',
-        image: '',
-        options: ['', '', '', ''],
-        correctAnswer: 0,
-        subject: 'Demo Test'
+    } else {
+      // Integer question
+      if (integerAnswer === '' || isNaN(Number(integerAnswer))) {
+        alert('Please enter a valid integer answer (e.g. 42).');
+        return;
+      }
+
+      onAddQuestion({
+        id: Date.now(),
+        section: section,
+        type: 'integer',
+        question: questionText.trim(),
+        image: image.trim(),
+        correctAnswer: parseInt(integerAnswer, 10),
       });
     }
+
+    // Reset form
+    setQuestionText('');
+    setImage('');
+    setOptions(['', '', '', '']);
+    setCorrectOptionIndex(0);
+    setIntegerAnswer('');
   };
 
   return (
     <Card variant="outlined">
       <CardContent>
-        <Typography level="h3" mb={2}>Add New Question</Typography>
+        <Typography level="h3" mb={2}>Add Question to Examination</Typography>
         <form onSubmit={handleSubmit}>
           <Stack spacing={2}>
+            {/* Section Selection */}
             <FormControl>
-              <FormLabel>Subject</FormLabel>
+              <FormLabel>Target Section (Total 4 Sections)</FormLabel>
               <Select
-                value={question.subject}
-                onChange={(e, value) => setQuestion({ ...question, subject: value })}
+                value={section}
+                onChange={(e, value) => setSection(value)}
               >
-                <Option value="Demo Test">Demo Test</Option>
-                <Option value="Physics">Physics</Option>
-                <Option value="Mathematics">Mathematics</Option>
-                <Option value="Chemistry">Chemistry</Option>
+                <Option value="Section 1">Section 1</Option>
+                <Option value="Section 2">Section 2</Option>
+                <Option value="Section 3">Section 3</Option>
+                <Option value="Section 4">Section 4</Option>
               </Select>
             </FormControl>
 
+            {/* Question Type: MCQ vs Integer */}
             <FormControl>
-              <FormLabel>Question</FormLabel>
+              <FormLabel>Question Format</FormLabel>
+              <Box display="flex" gap={1}>
+                <Button
+                  size="sm"
+                  variant={questionType === 'mcq' ? 'solid' : 'outlined'}
+                  color="primary"
+                  startDecorator={<ListAlt />}
+                  onClick={() => setQuestionType('mcq')}
+                >
+                  Multiple Choice (MCQ)
+                </Button>
+                <Button
+                  size="sm"
+                  variant={questionType === 'integer' ? 'solid' : 'outlined'}
+                  color="primary"
+                  startDecorator={<Numbers />}
+                  onClick={() => setQuestionType('integer')}
+                >
+                  Numerical / Integer Type
+                </Button>
+              </Box>
+            </FormControl>
+
+            {/* Question Text */}
+            <FormControl required>
+              <FormLabel>Question Text</FormLabel>
               <Textarea
-                placeholder="Enter your question here..."
-                value={question.question}
-                onChange={(e) => setQuestion({ ...question, question: e.target.value })}
+                placeholder="Type your question here..."
+                value={questionText}
+                onChange={(e) => setQuestionText(e.target.value)}
                 minRows={2}
                 required
               />
             </FormControl>
 
+            {/* Optional Image URL */}
             <FormControl>
-              <FormLabel>Image URL (Optional)</FormLabel>
+              <FormLabel>Optional Diagram / Image URL</FormLabel>
               <Input
-                placeholder="https://example.com/image.jpg"
-                value={question.image}
-                onChange={(e) => setQuestion({ ...question, image: e.target.value })}
+                placeholder="https://example.com/diagram.png"
+                value={image}
+                onChange={(e) => setImage(e.target.value)}
               />
             </FormControl>
 
-            <Box>
-              <FormLabel>Options</FormLabel>
-              {question.options.map((option, index) => (
-                <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
-                  <Input
-                    placeholder={`Option ${index + 1}`}
-                    value={option}
-                    onChange={(e) => handleOptionChange(index, e.target.value)}
-                    sx={{ flex: 1 }}
-                    required
-                  />
-                  <Button
-                    variant={question.correctAnswer === index ? 'solid' : 'outlined'}
-                    color={question.correctAnswer === index ? 'success' : 'neutral'}
-                    size="sm"
-                    onClick={() => setQuestion({ ...question, correctAnswer: index })}
-                  >
-                    {question.correctAnswer === index ? 'Correct' : 'Mark Correct'}
-                  </Button>
-                  {question.options.length > 2 && (
-                    <IconButton
-                      variant="outlined"
-                      color="danger"
-                      size="sm"
-                      onClick={() => removeOption(index)}
-                    >
-                      <Delete />
-                    </IconButton>
+            {/* Conditional fields based on type */}
+            {questionType === 'mcq' ? (
+              <Box>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                  <FormLabel>Options (Select the correct option)</FormLabel>
+                  {options.length < 6 && (
+                    <Button size="sm" variant="plain" startDecorator={<Add />} onClick={addOption}>
+                      Add Option
+                    </Button>
                   )}
                 </Box>
-              ))}
-              <Button
-                variant="outlined"
-                startDecorator={<Add />}
-                onClick={addOption}
-                size="sm"
-              >
-                Add Option
-              </Button>
-            </Box>
 
-            <Button type="submit" size="lg" color="primary">
-              Add Question
+                <Stack spacing={1}>
+                  {options.map((opt, idx) => (
+                    <Box key={idx} display="flex" alignItems="center" gap={1}>
+                      <Radio
+                        checked={correctOptionIndex === idx}
+                        onChange={() => setCorrectOptionIndex(idx)}
+                        name="correct-option-group"
+                      />
+                      <Input
+                        placeholder={`Option ${String.fromCharCode(65 + idx)}`}
+                        value={opt}
+                        onChange={(e) => handleOptionChange(idx, e.target.value)}
+                        sx={{ flex: 1 }}
+                        required={idx < 2}
+                      />
+                      {options.length > 2 && (
+                        <IconButton size="sm" color="danger" variant="plain" onClick={() => removeOption(idx)}>
+                          <Delete />
+                        </IconButton>
+                      )}
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            ) : (
+              <FormControl required>
+                <FormLabel>Correct Integer Answer</FormLabel>
+                <Input
+                  type="number"
+                  step="1"
+                  placeholder="e.g. 42, -5, 100"
+                  value={integerAnswer}
+                  onChange={(e) => setIntegerAnswer(e.target.value)}
+                  sx={{ maxWidth: 220, fontSize: "1.1rem", fontWeight: "bold" }}
+                  required
+                />
+                <Typography level="body-xs" color="neutral" sx={{ mt: 0.5 }}>
+                  Examinees will type an integer into an input box instead of choosing options.
+                </Typography>
+              </FormControl>
+            )}
+
+            <Button type="submit" size="md" color="success" startDecorator={<Add />}>
+              Add to {section}
             </Button>
           </Stack>
         </form>

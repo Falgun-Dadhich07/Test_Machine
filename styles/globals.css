@@ -1,22 +1,24 @@
 body {
   padding: 1rem;
+  margin: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 ::-webkit-scrollbar {
-  width: 0.35rem;
+  width: 0.4rem;
 }
 
 ::-webkit-scrollbar-track {
-  box-shadow: inset 0 0 5px transparent;
+  background: transparent;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #909090;
+  background: rgba(0, 168, 89, 0.4);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #656667;
+  background: #00a859;
 }
 .bottom{
   position: absolute;
@@ -120,13 +122,13 @@ body {
     font-size: 14px !important;
     color: #ffffff !important;
     opacity: 1 !important;
-    background: #0b6bcb !important;
+    background: #283e2c !important;
     position: relative !important;
     bottom: 0px !important;
   }
 
   .swiper-pagination-bullet-active {
     color: #fff !important;
-    background: #1f7a1f !important;
+    background: #00a859 !important;
   }
 }

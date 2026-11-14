@@ -1,31 +1,20 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from "react";
 
 export const useFullscreenProctor = ({
   onFullscreenViolation,
   enableWarnings = true,
-  maxViolations = 3
-}) => {
+  maxViolations = 3,
+  enabled = true,
+} = {}) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [violations, setViolations] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
-
-  // Enter fullscreen
-  const enterFullscreen = useCallback(async () => {
-    try {
-      if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
-      } else if (document.documentElement.webkitRequestFullscreen) {
-        await document.documentElement.webkitRequestFullscreen();
-      } else if (document.documentElement.msRequestFullscreen) {
-        await document.documentElement.msRequestFullscreen();
-      }
-    } catch (error) {
-      console.error('Failed to enter fullscreen:', error);
-    }
-  }, []);
+  const [warningMessage, setWarningMessage] = useState(null);
+  const violationLogsRef = useRef([]);
 
   // Check if currently in fullscreen
   const checkFullscreen = useCallback(() => {
+    if (typeof document === "undefined") return false;
     return !!(
       document.fullscreenElement ||
       document.webkitFullscreenElement ||
@@ -33,134 +22,155 @@ export const useFullscreenProctor = ({
     );
   }, []);
 
+  // Enter fullscreen helper
+  const enterFullscreen = useCallback(async () => {
+    if (typeof document === "undefined") return;
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else if (el.webkitRequestFullscreen) {
+        await el.webkitRequestFullscreen();
+      } else if (el.msRequestFullscreen) {
+        await el.msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } catch (error) {
+      console.warn("Fullscreen request requires user gesture or permission:", error);
+    }
+  }, []);
+
+  const recordViolation = useCallback(
+    (type, details = "") => {
+      if (isBlocked) return;
+
+      setViolations((prev) => {
+        const next = prev + 1;
+        const entry = {
+          type,
+          details,
+          violationNumber: next,
+          timestamp: new Date().toISOString(),
+        };
+        violationLogsRef.current.push(entry);
+
+        if (enableWarnings) {
+          if (next >= maxViolations) {
+            setWarningMessage(
+              `Maximum violation limit reached (${next}/${maxViolations})! Your exam is being automatically submitted for review.`
+            );
+          } else {
+            setWarningMessage(
+              `Security Warning: ${type.replace(/_/g, " ")}. Please stay in fullscreen and do not switch windows. Violation ${next} of ${maxViolations}.`
+            );
+          }
+        }
+
+        if (next >= maxViolations) {
+          setIsBlocked(true);
+          onFullscreenViolation?.("max_violations_reached", next, violationLogsRef.current);
+        } else {
+          onFullscreenViolation?.(type, next, violationLogsRef.current);
+        }
+
+        return next;
+      });
+    },
+    [isBlocked, enableWarnings, maxViolations, onFullscreenViolation]
+  );
+
   // Handle fullscreen change
   const handleFullscreenChange = useCallback(() => {
-    const isCurrentlyFullscreen = checkFullscreen();
-    setIsFullscreen(isCurrentlyFullscreen);
+    const isNowFullscreen = checkFullscreen();
+    setIsFullscreen(isNowFullscreen);
 
-    if (!isCurrentlyFullscreen && !isBlocked) {
-      // User exited fullscreen
-      const newViolations = violations + 1;
-      setViolations(newViolations);
-
-      if (enableWarnings) {
-        alert(`Warning: You must stay in fullscreen mode. Violations: ${newViolations}/${maxViolations}`);
-      }
-
-      if (newViolations >= maxViolations) {
-        setIsBlocked(true);
-        onFullscreenViolation?.('max_violations_reached');
-      } else {
-        // Force back to fullscreen after a short delay
-        setTimeout(() => {
-          enterFullscreen();
-        }, 1000);
-      }
-
-      onFullscreenViolation?.('exited_fullscreen', newViolations);
+    if (!isNowFullscreen && !isBlocked) {
+      recordViolation("exited_fullscreen", "User exited fullscreen view");
     }
-  }, [violations, isBlocked, enableWarnings, maxViolations, onFullscreenViolation, enterFullscreen, checkFullscreen]);
+  }, [checkFullscreen, isBlocked, recordViolation]);
 
-  // Prevent common exit methods
+  // Handle visibility change (tab switching, minimizing browser)
+  const handleVisibilityChange = useCallback(() => {
+    if (document.hidden && !isBlocked) {
+      recordViolation("tab_switch", "User navigated away or switched browser tab");
+    }
+  }, [isBlocked, recordViolation]);
+
+  // Handle window blur (user clicked outside browser, opened split screen)
+  const handleWindowBlur = useCallback(() => {
+    if (!isBlocked && checkFullscreen()) {
+      recordViolation("window_blur", "Browser window lost focus");
+    }
+  }, [isBlocked, checkFullscreen, recordViolation]);
+
+  // Prevent common escape shortcuts
   const preventExit = useCallback((e) => {
-    // Prevent Escape key
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    }
-
-    // Prevent F11
-    if (e.key === 'F11') {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    }
-
-    // Prevent Alt+Tab, Ctrl+Alt+Del, etc.
-    if (e.altKey || (e.ctrlKey && e.altKey)) {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    }
-
-    // Prevent Windows key
-    if (e.metaKey) {
+    if (e.key === "Escape" || e.key === "F11" || (e.altKey && e.key === "Tab") || e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       return false;
     }
   }, []);
 
-  // Handle visibility change (tab switching, minimizing)
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden && !isBlocked) {
-      const newViolations = violations + 1;
-      setViolations(newViolations);
-
-      if (newViolations >= maxViolations) {
-        setIsBlocked(true);
-        onFullscreenViolation?.('max_violations_reached');
-      }
-
-      onFullscreenViolation?.('tab_switch', newViolations);
-    }
-  }, [violations, isBlocked, maxViolations, onFullscreenViolation]);
-
-  // Prevent right-click context menu
+  // Prevent right-click context menu & copy/paste
   const preventContextMenu = useCallback((e) => {
     e.preventDefault();
     return false;
   }, []);
 
-  // Setup event listeners
+  const clearWarning = useCallback(() => {
+    setWarningMessage(null);
+  }, []);
+
   useEffect(() => {
-    // Fullscreen change listeners
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+    if (!enabled) return;
 
-    // Keyboard event listeners
-    document.addEventListener('keydown', preventExit, true);
-    document.addEventListener('keyup', preventExit, true);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("msfullscreenchange", handleFullscreenChange);
 
-    // Visibility change listener
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("keydown", preventExit, true);
+    document.addEventListener("keyup", preventExit, true);
 
-    // Context menu prevention
-    document.addEventListener('contextmenu', preventContextMenu);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
 
-    // Prevent browser back/forward
+    document.addEventListener("contextmenu", preventContextMenu);
+
     const preventNavigation = (e) => {
       e.preventDefault();
-      return '';
+      return "";
     };
-    window.addEventListener('beforeunload', preventNavigation);
-    window.addEventListener('popstate', preventNavigation);
+    window.addEventListener("beforeunload", preventNavigation);
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('keydown', preventExit, true);
-      document.removeEventListener('keyup', preventExit, true);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('contextmenu', preventContextMenu);
-      window.removeEventListener('beforeunload', preventNavigation);
-      window.removeEventListener('popstate', preventNavigation);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("msfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("keydown", preventExit, true);
+      document.removeEventListener("keyup", preventExit, true);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("contextmenu", preventContextMenu);
+      window.removeEventListener("beforeunload", preventNavigation);
     };
-  }, [handleFullscreenChange, preventExit, handleVisibilityChange, preventContextMenu]);
-
-  // Auto-enter fullscreen on mount
-  useEffect(() => {
-    enterFullscreen();
-  }, [enterFullscreen]);
+  }, [
+    handleFullscreenChange,
+    handleVisibilityChange,
+    handleWindowBlur,
+    preventExit,
+    preventContextMenu,
+    enabled,
+  ]);
 
   return {
     isFullscreen,
     violations,
     isBlocked,
+    warningMessage,
+    clearWarning,
     enterFullscreen,
-    checkFullscreen
+    checkFullscreen,
+    violationLogs: violationLogsRef.current,
   };
 };

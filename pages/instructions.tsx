@@ -25,13 +25,13 @@ export default function TypographyScales() {
         </Typography>
 
         <Typography level="body-lg">
-          1. Total duration of Exam is 180 min.
+          1. Total duration of the test is 60 min.
           <br />
           2. The clock will be set at the server. The countdown timer in the top
           right corner of screen will display the remaining time available for
-          you to complete the examination. When the timer reaches zero, the
-          examination will end by itself. You will not be required to end or
-          submit your examination.
+          you to complete the test. When the timer reaches zero, the
+          test will end by itself. You will not be required to end or
+          submit your test.
           <br /> 3. The Questions Palette displayed on the right side of screen
           will show the status of each question using one of the following
           symbols:

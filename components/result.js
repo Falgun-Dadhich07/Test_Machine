@@ -1,8 +1,6 @@
 // pages/admin/dashboard.js
 import { useState, useEffect } from 'react';
 import {
-  CssVarsProvider,
-  CssBaseline,
   Box,
   Typography,
   Card,
@@ -24,7 +22,7 @@ import {
   Alert
 } from '@mui/joy';
 import { Search, Eye, Download, Filter, Users, FileText, BarChart3, Calendar } from 'lucide-react';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { db } from '../firebase-config'; // Adjust path to your firebase config
 
 export default function AdminDashboard() {
@@ -58,8 +56,8 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       
-      // Fetch users
-      const usersQuery = query(collection(db, "user"), orderBy("createdAt", "desc"));
+      // Fetch users (safely capped to avoid quota explosion)
+      const usersQuery = query(collection(db, "user"), limit(200));
       const usersSnapshot = await getDocs(usersQuery);
       const usersData = usersSnapshot.docs.map(doc => ({
         id: doc.id,
@@ -67,13 +65,32 @@ export default function AdminDashboard() {
       }));
       setUsers(usersData);
 
-      // Fetch test results
-      const testResultsQuery = query(collection(db, "testResults"), orderBy("timestamp", "desc"));
-      const testResultsSnapshot = await getDocs(testResultsQuery);
-      const testResultsData = testResultsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Fetch test results (from API endpoint which unifies local disk storage & Firestore)
+      let testResultsData = [];
+      try {
+        const res = await fetch("/api/admin/results");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.results && Array.isArray(json.results)) {
+            testResultsData = json.results;
+          }
+        }
+      } catch (e) {
+        console.warn("API results fetch note:", e);
+      }
+
+      if (testResultsData.length === 0 && db) {
+        try {
+          const testResultsQuery = query(collection(db, "testResults"), limit(200));
+          const testResultsSnapshot = await getDocs(testResultsQuery);
+          testResultsData = testResultsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+        } catch (dbErr) {
+          console.warn("Firestore testResults query note:", dbErr);
+        }
+      }
       setTestResults(testResultsData);
 
       // Calculate stats
@@ -201,26 +218,21 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <CssVarsProvider>
-        <CssBaseline />
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-          <Typography level="h4">Loading dashboard...</Typography>
-        </Box>
-      </CssVarsProvider>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+        <Typography level="h4">Loading dashboard...</Typography>
+      </Box>
     );
   }
 
   return (
-    <CssVarsProvider>
-      <CssBaseline />
-      <Box sx={{ p: 3, backgroundColor: 'background.surface' }}>
+    <Box sx={{ p: 3, bgcolor: 'background.surface', borderRadius: 'md' }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Typography level="h2" sx={{ mb: 1 }}>
-            Pannel
+          <Typography level="h2" sx={{ mb: 1, fontWeight: "bold" }}>
+            Winter Project Selection Test Results
           </Typography>
           <Typography level="body-md" color="neutral">
-            Monitor and manage all student test results
+            Monitor and manage candidate scores, answers, and integrity audits
           </Typography>
         </Box>
 
@@ -492,6 +504,5 @@ export default function AdminDashboard() {
           </ModalDialog>
         </Modal>
       </Box>
-    </CssVarsProvider>
-  );
-}
+    );
+  }

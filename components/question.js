@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '../firebase-config';
 import {
   Container,
   Typography,
@@ -17,6 +15,7 @@ export default function Home() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleAddQuestion = (newQuestion) => {
     setQuestions([...questions, newQuestion]);
@@ -29,26 +28,27 @@ export default function Home() {
   const handleSaveQuestionPaper = async (paperDetails) => {
     setLoading(true);
     setSuccessMessage('');
+    setErrorMessage('');
 
     try {
-      const questionPaper = {
-        ...paperDetails,
-        questions: questions,
-        totalQuestions: questions.length,
-        createdAt: new Date().toISOString(),
-        createdBy: 'admin' // You can replace this with actual user info
-      };
+      const res = await fetch('/api/admin/save-paper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...paperDetails,
+          questions: questions,
+        }),
+      });
 
-      const docRef = await addDoc(collection(db, 'questionPapers'), questionPaper);
-      
-      setSuccessMessage(`Question paper saved successfully! Document ID: ${docRef.id}`);
-      
-      // Optional: Clear the form after successful save
-      // setQuestions([]);
-      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessMessage(data.message || 'Question paper saved successfully!');
+      } else {
+        setErrorMessage(data.error || 'Failed to save question paper.');
+      }
     } catch (error) {
       console.error('Error saving question paper:', error);
-      alert('Error saving question paper. Please check your Firebase configuration.');
+      setErrorMessage('Network or server error while saving question paper.');
     } finally {
       setLoading(false);
     }
@@ -61,19 +61,25 @@ export default function Home() {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <Typography level="h1" mb={2}>
-          Question Paper Creator
+    <Container maxWidth="lg" sx={{ py: 2 }}>
+      <Box sx={{ mb: 3, textAlign: 'center' }}>
+        <Typography level="h2" mb={1}>
+          Examination Paper Creator
         </Typography>
-        <Typography level="body1" color="neutral">
-          Create and save question papers to Firebase with ease
+        <Typography level="body-sm" color="neutral">
+          Create questions across 4 sections (MCQ and Numerical Integer type).
         </Typography>
       </Box>
 
       {successMessage && (
         <Alert color="success" variant="soft" sx={{ mb: 3 }}>
           {successMessage}
+        </Alert>
+      )}
+
+      {errorMessage && (
+        <Alert color="danger" variant="soft" sx={{ mb: 3 }}>
+          {errorMessage}
         </Alert>
       )}
 
@@ -92,17 +98,14 @@ export default function Home() {
 
         <Grid xs={12}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography level="h2">Current Question Paper</Typography>
+            <Typography level="h3">Current Examination Questions ({questions.length})</Typography>
             {questions.length > 0 && (
-              <Button variant="outlined" color="danger" onClick={clearAllQuestions}>
+              <Button variant="outlined" color="danger" size="sm" onClick={clearAllQuestions}>
                 Clear All Questions
               </Button>
             )}
           </Box>
-          <QuestionsList
-            questions={questions}
-            onDeleteQuestion={handleDeleteQuestion}
-          />
+          <QuestionsList questions={questions} onDeleteQuestion={handleDeleteQuestion} />
         </Grid>
       </Grid>
     </Container>

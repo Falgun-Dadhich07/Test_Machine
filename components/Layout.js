@@ -9,6 +9,7 @@ import Button from "@mui/joy/Button";
 import Typography from "@mui/joy/Typography";
 import { CssVarsProvider } from "@mui/joy/styles";
 import CssBaseline from "@mui/joy/CssBaseline";
+import { shareTheme } from "../styles/theme";
 
 export default function Layout({ children }) {
   const { currentUser, logout } = useAuth();
@@ -28,14 +29,14 @@ export default function Layout({ children }) {
 
   const [showCustomTheme, setShowCustomTheme] = React.useState(true);
   const [open, setOpen] = React.useState(false);
-   
+
 
   return (
-        
-    <CssVarsProvider disableTransitionOnChange defaultMode="dark">
+
+    <CssVarsProvider theme={shareTheme} disableTransitionOnChange defaultMode="dark">
       <CssBaseline />
-      
-      <div className="min-h-screen bg-gray-100">
+
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.body", color: "text.primary" }}>
         <nav>
           <Box
             sx={{
@@ -51,10 +52,20 @@ export default function Layout({ children }) {
               alignItems="center"
               spacing={0}
             >
-              <div style={{ display: "flex" }}>
-                <img src="/icon.svg" width="40" height="40" />
-                <Typography level="h1" className="tab_title">
-                  Open Proctor
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <img
+                  src="/share-logo.jpg"
+                  width="42"
+                  height="42"
+                  style={{ borderRadius: "8px", objectFit: "cover" }}
+                  alt="ShARE: Student Chapter"
+                />
+                <Typography
+                  level="h1"
+                  className="tab_title"
+                  sx={{ fontWeight: "bold", fontSize: "1.35rem", letterSpacing: "0.5px" }}
+                >
+                  ShARE: Student Chapter
                 </Typography>
               </div>
             </Stack>
@@ -70,14 +81,17 @@ export default function Layout({ children }) {
               }}
             >
               <ColorSchemeToggle />
-              <Link href="/instructions">
-                <Button variant="solid" size="lg">
-                  Instructions
-                </Button>
-              </Link>
 
               {currentUser && (
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  {(currentUser.email?.toLowerCase() === (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase() ||
+                    currentUser.email?.toLowerCase().startsWith("admin@")) && (
+                      <Link href="/admin">
+                        <Button variant="soft" color="danger" size="lg">
+                          Admin
+                        </Button>
+                      </Link>
+                    )}
                   <Button
                     variant="solid"
                     size="lg"
@@ -92,8 +106,8 @@ export default function Layout({ children }) {
           </Box>
         </nav>
         <main>{children}</main>
-      </div>
+      </Box>
     </CssVarsProvider>
- 
+
   );
 }

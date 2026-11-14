@@ -1,0 +1,77 @@
+[
+  {
+    "id": "res_1794697893014",
+    "userId": "zpsv6sE6pahtvBc7EjMzuyeaGBN2",
+    "userEmail": "amanh24@iitk.ac.in",
+    "subject": "Examination",
+    "score": 3,
+    "totalQuestions": 4,
+    "percentage": 75,
+    "correctCount": 3,
+    "incorrectCount": 1,
+    "unattemptedCount": 0,
+    "answers": {
+      "1794696540902": 0,
+      "1794696561399": 0,
+      "1794696573575": "10",
+      "1794696584467": "10"
+    },
+    "violations": 2,
+    "violationDetails": [
+      {
+        "type": "window_blur",
+        "details": "Browser window lost focus",
+        "violationNumber": 1,
+        "timestamp": "2026-11-14T23:11:20.945Z"
+      },
+      {
+        "type": "window_blur",
+        "details": "Browser window lost focus",
+        "violationNumber": 1,
+        "timestamp": "2026-11-14T23:11:20.948Z"
+      },
+      {
+        "type": "tab_switch",
+        "details": "User navigated away or switched browser tab",
+        "violationNumber": 2,
+        "timestamp": "2026-11-14T23:11:21.055Z"
+      },
+      {
+        "type": "tab_switch",
+        "details": "User navigated away or switched browser tab",
+        "violationNumber": 2,
+        "timestamp": "2026-11-14T23:11:21.056Z"
+      },
+      {
+        "type": "auto_submit",
+        "details": "Student confirmed submission",
+        "timestamp": "2026-11-14T23:11:32.859Z"
+      }
+    ],
+    "proctorSnapshots": [],
+    "createdAt": "2026-11-14T23:11:33.014Z"
+  },
+  {
+    "id": "res_1794697090722",
+    "userId": "zpsv6sE6pahtvBc7EjMzuyeaGBN2",
+    "userEmail": "amanh24@iitk.ac.in",
+    "subject": "Examination",
+    "score": 0,
+    "totalQuestions": 4,
+    "percentage": 0,
+    "correctCount": 0,
+    "incorrectCount": 0,
+    "unattemptedCount": 4,
+    "answers": {},
+    "violations": 0,
+    "violationDetails": [
+      {
+        "type": "auto_submit",
+        "details": "Student confirmed submission",
+        "timestamp": "2026-11-14T22:58:10.447Z"
+      }
+    ],
+    "proctorSnapshots": [],
+    "createdAt": "2026-11-14T22:58:10.722Z"
+  }
+]
