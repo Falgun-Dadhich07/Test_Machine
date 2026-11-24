@@ -4,6 +4,7 @@ import { auth, db } from "../firebase-config";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInAnonymously,
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -41,6 +42,9 @@ export function AuthProvider({ children }) {
     }
 
     const { candidate } = await verifyRes.json();
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("candidate_email", cleanEmail);
+    }
 
     // 2. Sign in or initialize on-the-fly in Firebase Auth on student's device
     if (auth) {
@@ -50,7 +54,8 @@ export function AuthProvider({ children }) {
         // If candidate exists in roster but not yet created in Firebase Auth, auto-provision on first sign-in
         if (
           signInErr.code === "auth/user-not-found" ||
-          signInErr.code === "auth/invalid-credential"
+          signInErr.code === "auth/invalid-credential" ||
+          signInErr.code === "auth/wrong-password"
         ) {
           try {
             const newCred = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
@@ -67,17 +72,49 @@ export function AuthProvider({ children }) {
             return newCred;
           } catch (createErr) {
             console.warn("First-time candidate provisioning note:", createErr);
+            if (
+              createErr.code === "auth/email-already-in-use" ||
+              createErr.code === "auth/invalid-credential"
+            ) {
+              try {
+                // If candidate previously had a different password in Firebase Auth, authenticate anonymously for this session
+                const anonCred = await signInAnonymously(auth);
+                const effectiveUser = {
+                  ...anonCred.user,
+                  email: cleanEmail,
+                  uid: anonCred.user.uid,
+                };
+                setCurrentUser(effectiveUser);
+                return anonCred;
+              } catch (anonErr) {
+                console.warn("Anonymous auth fallback note:", anonErr);
+              }
+            }
             throw signInErr;
           }
         }
         throw signInErr;
       }
+    } else {
+      // Local fallback if Firebase Auth is offline
+      const mockUser = {
+        email: cleanEmail,
+        uid: "local_" + Date.now(),
+      };
+      setCurrentUser(mockUser);
+      return { user: mockUser };
     }
   }
 
   function logout() {
-    if (!auth) return Promise.resolve();
-    return signOut(auth);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("candidate_email");
+    }
+    if (!auth) {
+      setCurrentUser(null);
+      return Promise.resolve();
+    }
+    return signOut(auth).then(() => setCurrentUser(null));
   }
 
   useEffect(() => {
@@ -90,7 +127,19 @@ export function AuthProvider({ children }) {
       const unsubscribe = onAuthStateChanged(
         auth,
         (user) => {
-          setCurrentUser(user);
+          if (user) {
+            const savedEmail =
+              typeof window !== "undefined"
+                ? sessionStorage.getItem("candidate_email")
+                : null;
+            const effectiveUser = {
+              ...user,
+              email: user.email || savedEmail || "candidate@iitk.ac.in",
+            };
+            setCurrentUser(effectiveUser);
+          } else {
+            setCurrentUser(null);
+          }
           setLoading(false);
         },
         (error) => {

@@ -44,6 +44,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [availableTests, setAvailableTests] = useState(initialDefaultTests);
   const [agreed, setAgreed] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [checkingAttempt, setCheckingAttempt] = useState(true);
 
   const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "")
     .split(",")
@@ -52,6 +54,24 @@ export default function Dashboard() {
     currentUser?.email &&
     (adminEmails.includes(currentUser.email.toLowerCase()) ||
       currentUser.email.toLowerCase().startsWith("admin@"));
+
+  const checkCandidateAttempt = useCallback(async () => {
+    if (!currentUser?.email) return;
+    try {
+      setCheckingAttempt(true);
+      const res = await fetch(`/api/quiz/check-attempt?email=${encodeURIComponent(currentUser.email)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hasSubmitted && !data.isAdmin) {
+          setHasSubmitted(true);
+        }
+      }
+    } catch (e) {
+      console.warn("Attempt check error:", e);
+    } finally {
+      setCheckingAttempt(false);
+    }
+  }, [currentUser]);
 
   const fetchDashboardData = useCallback(async () => {
     if (!currentUser) return;
@@ -86,9 +106,11 @@ export default function Dashboard() {
       return;
     }
     fetchDashboardData();
-  }, [currentUser, router, fetchDashboardData]);
+    checkCandidateAttempt();
+  }, [currentUser, router, fetchDashboardData, checkCandidateAttempt]);
 
   const startTest = (subjectOrId) => {
+    if (hasSubmitted && !isAdmin) return;
     if (!agreed) return;
     router.push(`/test/${encodeURIComponent(subjectOrId)}`);
   };
@@ -165,21 +187,46 @@ export default function Dashboard() {
             }}
           >
             <div>
-              <Chip
-                size="sm"
-                variant="solid"
-                color="primary"
-                sx={{ mb: 2, fontWeight: "bold" }}
-              >
-                WINTER PROJECT SELECTION
-              </Chip>
+              {hasSubmitted && !isAdmin ? (
+                <Chip
+                  size="sm"
+                  variant="solid"
+                  color="danger"
+                  startDecorator={<Lock fontSize="small" />}
+                  sx={{ mb: 2, fontWeight: "bold" }}
+                >
+                  TEST ALREADY SUBMITTED
+                </Chip>
+              ) : (
+                <Chip
+                  size="sm"
+                  variant="solid"
+                  color="primary"
+                  sx={{ mb: 2, fontWeight: "bold" }}
+                >
+                  WINTER PROJECT SELECTION
+                </Chip>
+              )}
               <Typography level="h2" sx={{ fontWeight: "bold", mb: 1 }}>
                 Winter Project Selection Test
               </Typography>
-              <Typography level="body-sm" color="neutral" sx={{ mb: 3 }}>
+              <Typography level="body-sm" color="neutral" sx={{ mb: 2 }}>
                 Official selection assessment featuring 4 sections with both
                 Multiple Choice and Numerical Integer-type questions.
               </Typography>
+
+              {hasSubmitted && !isAdmin && (
+                <Alert color="danger" variant="soft" sx={{ mb: 2.5 }} startDecorator={<Lock />}>
+                  <div>
+                    <Typography level="title-sm" fontWeight="bold">
+                      Single Attempt Limit
+                    </Typography>
+                    <Typography level="body-xs">
+                      You have already completed and submitted your examination. Under ShARE guidelines, candidates may take the test only once. Multiple attempts are not permitted.
+                    </Typography>
+                  </div>
+                </Alert>
+              )}
 
               <Stack spacing={1.5} sx={{ mb: 3 }}>
                 <Box display="flex" alignItems="center" gap={1.5}>
@@ -221,26 +268,42 @@ export default function Dashboard() {
             </div>
 
             <Box sx={{ pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
-              <Button
-                variant="solid"
-                color="primary"
-                size="lg"
-                fullWidth
-                disabled={!agreed}
-                startDecorator={<PlayArrow />}
-                onClick={() => startTest(primaryTest.subject)}
-                sx={{ borderRadius: "md", py: 1.5, fontWeight: "bold" }}
-              >
-                Start Selection Test
-              </Button>
-              {!agreed && (
-                <Typography
-                  level="body-xs"
-                  color="danger"
-                  sx={{ textAlign: "center", mt: 1 }}
+              {hasSubmitted && !isAdmin ? (
+                <Button
+                  variant="soft"
+                  color="neutral"
+                  size="lg"
+                  fullWidth
+                  disabled
+                  startDecorator={<Lock />}
+                  sx={{ borderRadius: "md", py: 1.5, fontWeight: "bold" }}
                 >
-                  * Read instructions and tick the declaration checkbox to enable
-                </Typography>
+                  Test Completed (Locked)
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="solid"
+                    color="primary"
+                    size="lg"
+                    fullWidth
+                    disabled={!agreed}
+                    startDecorator={<PlayArrow />}
+                    onClick={() => startTest(primaryTest.subject)}
+                    sx={{ borderRadius: "md", py: 1.5, fontWeight: "bold" }}
+                  >
+                    Start Selection Test
+                  </Button>
+                  {!agreed && (
+                    <Typography
+                      level="body-xs"
+                      color="danger"
+                      sx={{ textAlign: "center", mt: 1 }}
+                    >
+                      * Read instructions and tick the declaration checkbox to enable
+                    </Typography>
+                  )}
+                </>
               )}
             </Box>
           </Card>

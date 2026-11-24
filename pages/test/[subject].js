@@ -84,10 +84,26 @@ export default function ExamPage() {
   const [instructionChecked, setInstructionChecked] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedUserEmail, setSubmittedUserEmail] = useState("");
+  const [hasPreviousSubmission, setHasPreviousSubmission] = useState(false);
   const [logoutCountdown, setLogoutCountdown] = useState(8);
   const [submissionResult, setSubmissionResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
+  const adminEmails = useMemo(
+    () =>
+      (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    []
+  );
+
+  const isAdmin = useMemo(() => {
+    if (!currentUser?.email) return false;
+    const cleanEmail = currentUser.email.toLowerCase().trim();
+    return adminEmails.includes(cleanEmail) || cleanEmail.startsWith("admin@");
+  }, [currentUser, adminEmails]);
 
   // Proctoring State
   const [proctorSnapshots, setProctorSnapshots] = useState([]);
@@ -126,6 +142,25 @@ export default function ExamPage() {
     let isMounted = true;
     async function fetchQuizData() {
       setLoading(true);
+
+      // Check if candidate has already submitted (single attempt enforcement)
+      if (currentUser?.email && !isAdmin) {
+        try {
+          const attemptRes = await fetch(`/api/quiz/check-attempt?email=${encodeURIComponent(currentUser.email)}`);
+          if (attemptRes.ok) {
+            const attemptData = await attemptRes.json();
+            if (attemptData.hasSubmitted && !attemptData.isAdmin) {
+              if (isMounted) {
+                setHasPreviousSubmission(true);
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (attemptErr) {
+          console.warn("Attempt verification error:", attemptErr);
+        }
+      }
 
       try {
         const queryTarget = subject && subject !== "[subject]" ? subject : "Winter Project Selection Test";
@@ -331,6 +366,16 @@ export default function ExamPage() {
         await performCandidateLogout();
         return;
       }
+
+      if (res.status === 403) {
+        const errData = await res.json();
+        alert(errData.error || "You have already completed this test. Multiple attempts are not allowed.");
+        setHasPreviousSubmission(true);
+        setSubmitting(false);
+        await exitFullscreenHelper();
+        await performCandidateLogout();
+        return;
+      }
     } catch (apiErr) {
       console.warn("API submit failed, falling back to local evaluation:", apiErr);
     }
@@ -389,6 +434,58 @@ export default function ExamPage() {
       >
         <CircularProgress size="lg" />
         <Typography level="title-md">Loading Examination Sections...</Typography>
+      </Box>
+    );
+  }
+
+  // 0. Single-Attempt Guard View: Candidate has already completed the test
+  if (hasPreviousSubmission && !isAdmin) {
+    return (
+      <Box sx={{ maxWidth: 650, mx: "auto", my: { xs: 4, md: 8 }, p: { xs: 2, md: 3 } }}>
+        <Card variant="outlined" sx={{ p: { xs: 3, md: 4 }, textAlign: "center", borderRadius: "lg", boxShadow: "lg" }}>
+          <Box display="flex" justifyContent="center" mb={2}>
+            <img
+              src="/share-logo.jpg"
+              alt="ShARE: Student Chapter"
+              width="64"
+              height="64"
+              style={{ borderRadius: "12px", objectFit: "cover" }}
+            />
+          </Box>
+          <Box display="flex" justifyContent="center" mb={1.5}>
+            <Chip size="md" variant="soft" color="danger" startDecorator={<Lock fontSize="small" />}>
+              Single Attempt Limit Reached
+            </Chip>
+          </Box>
+          <Typography level="h2" sx={{ fontWeight: "bold", mb: 1 }}>
+            Examination Already Submitted
+          </Typography>
+          <Typography level="body-sm" color="neutral" sx={{ mb: 3 }}>
+            Candidate ID: <b>{currentUser?.email}</b>
+          </Typography>
+
+          <Alert color="danger" variant="soft" sx={{ mb: 3, textAlign: "left" }}>
+            Our records confirm that you have already completed and submitted the Winter Project Selection Test. Under ShARE examination guidelines, only one attempt per candidate is permitted. Your recorded submission is currently undergoing evaluation.
+          </Alert>
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center">
+            <Button variant="solid" color="primary" onClick={() => router.push("/dashboard")}>
+              Return to Dashboard
+            </Button>
+            <Button
+              variant="outlined"
+              color="neutral"
+              onClick={async () => {
+                try {
+                  if (logout) await logout();
+                  router.push("/login");
+                } catch (e) {}
+              }}
+            >
+              Log Out
+            </Button>
+          </Stack>
+        </Card>
       </Box>
     );
   }

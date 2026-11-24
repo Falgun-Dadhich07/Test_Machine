@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { db } from "../../../firebase-config";
-import { collection, addDoc, query, where, getDocs, doc, getDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { questionsData } from "../../../data/questions";
 
 export default async function handler(req, res) {
@@ -21,6 +21,72 @@ export default async function handler(req, res) {
 
   if (!userId) {
     return res.status(400).json({ error: "Missing required field: userId" });
+  }
+
+  const cleanEmail = (userEmail || "").trim().toLowerCase();
+
+  // 0. SINGLE-ATTEMPT ENFORCEMENT: Candidate can take test only once (Admin can redo multiple times)
+  const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const isAdmin = adminEmails.includes(cleanEmail) || cleanEmail.startsWith("admin@");
+
+  if (!isAdmin && cleanEmail) {
+    let alreadySubmitted = false;
+
+    // Check local submitted-candidates registry
+    try {
+      const regPath = path.join(process.cwd(), "data", "submitted-candidates.json");
+      if (fs.existsSync(regPath)) {
+        const list = JSON.parse(fs.readFileSync(regPath, "utf-8"));
+        if (Array.isArray(list) && list.some((e) => e.toLowerCase() === cleanEmail)) {
+          alreadySubmitted = true;
+        }
+      }
+    } catch (e) {}
+
+    // Check local test-results.json
+    if (!alreadySubmitted) {
+      try {
+        const resPath = path.join(process.cwd(), "data", "test-results.json");
+        if (fs.existsSync(resPath)) {
+          const list = JSON.parse(fs.readFileSync(resPath, "utf-8"));
+          if (Array.isArray(list) && list.some((r) => r.userEmail && r.userEmail.toLowerCase().trim() === cleanEmail)) {
+            alreadySubmitted = true;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Check Cloud Firestore (for Vercel serverless persistence)
+    if (!alreadySubmitted && db) {
+      try {
+        const docRef = doc(db, "submittedCandidates", cleanEmail);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          alreadySubmitted = true;
+        }
+      } catch (e) {}
+
+      if (!alreadySubmitted) {
+        try {
+          const q = query(collection(db, "testResults"), where("userEmail", "==", cleanEmail));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            alreadySubmitted = true;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (alreadySubmitted) {
+      return res.status(403).json({
+        error: "Access Denied: You have already completed and submitted your examination. Multiple attempts are strictly prohibited.",
+        alreadySubmitted: true,
+      });
+    }
   }
 
   try {
@@ -161,6 +227,22 @@ export default async function handler(req, res) {
       }
       existingResults.unshift(resultDoc);
       fs.writeFileSync(resultsPath, JSON.stringify(existingResults, null, 2), "utf-8");
+      // Record in data/submitted-candidates.json registry for instant single-attempt lookups
+      if (cleanEmail) {
+        const regPath = path.join(process.cwd(), "data", "submitted-candidates.json");
+        let submittedList = [];
+        if (fs.existsSync(regPath)) {
+          try {
+            submittedList = JSON.parse(fs.readFileSync(regPath, "utf-8"));
+          } catch (e) {
+            submittedList = [];
+          }
+        }
+        if (!submittedList.includes(cleanEmail)) {
+          submittedList.push(cleanEmail);
+          fs.writeFileSync(regPath, JSON.stringify(submittedList, null, 2), "utf-8");
+        }
+      }
     } catch (fsErr) {
       console.warn("Could not write to local storage:", fsErr.message);
     }
@@ -175,6 +257,21 @@ export default async function handler(req, res) {
         const docRef = await addDoc(collection(db, "testResults"), firestoreDoc);
         docId = docRef.id;
         resultDoc.id = docId;
+
+        // Also record in Firestore 'submittedCandidates' doc for fast single-attempt checks on serverless
+        if (cleanEmail) {
+          try {
+            await setDoc(doc(db, "submittedCandidates", cleanEmail), {
+              email: cleanEmail,
+              submittedAt: serverTimestamp(),
+              score,
+              totalQuestions,
+              resultId: docId,
+            });
+          } catch (regErr) {
+            console.warn("Firestore submittedCandidates note:", regErr.message);
+          }
+        }
       } catch (saveErr) {
         // Log cleanly without crashing the response
         console.warn("Firestore cloud write note (result safely stored on server):", saveErr.message);
