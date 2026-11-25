@@ -4,7 +4,6 @@ import { auth, db } from "../firebase-config";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInAnonymously,
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -42,16 +41,27 @@ export function AuthProvider({ children }) {
     }
 
     const { candidate } = await verifyRes.json();
+    const sessionUser = {
+      email: cleanEmail,
+      uid: candidate?.roleNumber
+        ? `cand_${candidate.roleNumber}`
+        : `cand_${cleanEmail.replace(/[^a-z0-9]/gi, "_")}`,
+      username: candidate?.username || cleanEmail.split("@")[0],
+      isAdmin: !!candidate?.isAdmin,
+      isServerVerified: true,
+    };
+
     if (typeof window !== "undefined") {
       sessionStorage.setItem("candidate_email", cleanEmail);
+      sessionStorage.setItem("verified_session_user", JSON.stringify(sessionUser));
     }
 
-    // 2. Sign in or initialize on-the-fly in Firebase Auth on student's device
+    // 2. Try Firebase Auth on student's device; fall back seamlessly to server-verified session
+    // if user exists with an old password, anonymous auth is disabled, or campus IP hits rate limits.
     if (auth) {
       try {
         return await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
       } catch (signInErr) {
-        // If candidate exists in roster but not yet created in Firebase Auth, auto-provision on first sign-in
         if (
           signInErr.code === "auth/user-not-found" ||
           signInErr.code === "auth/invalid-credential" ||
@@ -71,54 +81,49 @@ export function AuthProvider({ children }) {
             }
             return newCred;
           } catch (createErr) {
-            console.warn("First-time candidate provisioning note:", createErr);
-            if (
-              createErr.code === "auth/email-already-in-use" ||
-              createErr.code === "auth/invalid-credential"
-            ) {
-              try {
-                // If candidate previously had a different password in Firebase Auth, authenticate anonymously for this session
-                const anonCred = await signInAnonymously(auth);
-                const effectiveUser = {
-                  ...anonCred.user,
-                  email: cleanEmail,
-                  uid: anonCred.user.uid,
-                };
-                setCurrentUser(effectiveUser);
-                return anonCred;
-              } catch (anonErr) {
-                console.warn("Anonymous auth fallback note:", anonErr);
-              }
-            }
-            throw signInErr;
+            console.warn("Firebase Auth provisioning fallback to server-verified session:", createErr.code || createErr.message);
           }
+        } else {
+          console.warn("Firebase Auth sign-in fallback to server-verified session:", signInErr.code || signInErr.message);
         }
-        throw signInErr;
+
+        // Server already verified credentials via /api/auth/candidate-login
+        setCurrentUser(sessionUser);
+        return { user: sessionUser };
       }
     } else {
-      // Local fallback if Firebase Auth is offline
-      const mockUser = {
-        email: cleanEmail,
-        uid: "local_" + Date.now(),
-      };
-      setCurrentUser(mockUser);
-      return { user: mockUser };
+      setCurrentUser(sessionUser);
+      return { user: sessionUser };
     }
   }
 
   function logout() {
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("candidate_email");
+      sessionStorage.removeItem("verified_session_user");
     }
     if (!auth) {
       setCurrentUser(null);
       return Promise.resolve();
     }
-    return signOut(auth).then(() => setCurrentUser(null));
+    return signOut(auth)
+      .catch(() => {})
+      .finally(() => setCurrentUser(null));
   }
 
   useEffect(() => {
+    const getStoredSessionUser = () => {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = sessionStorage.getItem("verified_session_user");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    };
+
     if (!auth) {
+      setCurrentUser(getStoredSessionUser());
       setLoading(false);
       return;
     }
@@ -138,12 +143,13 @@ export function AuthProvider({ children }) {
             };
             setCurrentUser(effectiveUser);
           } else {
-            setCurrentUser(null);
+            setCurrentUser(getStoredSessionUser());
           }
           setLoading(false);
         },
         (error) => {
           console.warn("Auth state changed error:", error);
+          setCurrentUser(getStoredSessionUser());
           setLoading(false);
         }
       );
@@ -151,6 +157,7 @@ export function AuthProvider({ children }) {
       return unsubscribe;
     } catch (e) {
       console.warn("Failed to subscribe to auth state:", e);
+      setCurrentUser(getStoredSessionUser());
       setLoading(false);
     }
   }, []);
