@@ -150,16 +150,36 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "Question paper not found for scoring" });
     }
 
-    // Scoring Calculation: Handles both MCQ and Numerical Integer types
+    // Scoring Calculation: Handles both MCQ and Numerical Integer types + Section-wise breakdown
     let score = 0;
     let correctCount = 0;
     let incorrectCount = 0;
     let unattemptedCount = 0;
     const questions = masterPaper.questions;
+    const chunkSize = Math.max(1, Math.ceil(questions.length / 4));
+    const sectionScores = {
+      0: { name: "Section 1", score: 0, total: 0 },
+      1: { name: "Section 2", score: 0, total: 0 },
+      2: { name: "Section 3", score: 0, total: 0 },
+      3: { name: "Section 4", score: 0, total: 0 },
+    };
 
     questions.forEach((q, index) => {
       const qId = q.id !== undefined ? q.id : index + 1;
       const studentAns = answers[qId];
+
+      let secIdx = 0;
+      if (q.sectionIndex !== undefined && q.sectionIndex >= 0 && q.sectionIndex <= 3) {
+        secIdx = q.sectionIndex;
+      } else if (q.section) {
+        const match = q.section.match(/(\d)/);
+        if (match) {
+          secIdx = Math.max(0, Math.min(3, parseInt(match[1], 10) - 1));
+        }
+      } else {
+        secIdx = Math.min(3, Math.floor(index / chunkSize));
+      }
+      sectionScores[secIdx].total++;
 
       if (studentAns === undefined || studentAns === null || studentAns.toString().trim() === "") {
         unattemptedCount++;
@@ -169,6 +189,7 @@ export default async function handler(req, res) {
         if (!isNaN(parsedStudent) && parsedStudent === parsedCorrect) {
           score++;
           correctCount++;
+          sectionScores[secIdx].score++;
         } else {
           incorrectCount++;
         }
@@ -176,6 +197,7 @@ export default async function handler(req, res) {
         if (Number(studentAns) === Number(q.correctAnswer)) {
           score++;
           correctCount++;
+          sectionScores[secIdx].score++;
         } else {
           incorrectCount++;
         }
@@ -190,11 +212,12 @@ export default async function handler(req, res) {
     const resultDoc = {
       id: docId,
       userId,
-      userEmail: userEmail || "anonymous",
+      userEmail: cleanEmail || userEmail || "anonymous",
       subject: masterPaper.title || subject || "Examination",
       score,
       totalQuestions,
       percentage,
+      sectionScores,
       correctCount,
       incorrectCount,
       unattemptedCount,

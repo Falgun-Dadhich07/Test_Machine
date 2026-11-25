@@ -155,7 +155,7 @@ export default function AdminPage() {
             <NoteAdd sx={{ mr: 1 }} /> Quiz Creator & Manager
           </Tab>
           <Tab value={2}>
-            <AdminPanelSettings sx={{ mr: 1 }} /> Candidate Accounts (210 Users)
+            <AdminPanelSettings sx={{ mr: 1 }} /> Candidate Accounts (220 Users)
           </Tab>
         </TabList>
 
