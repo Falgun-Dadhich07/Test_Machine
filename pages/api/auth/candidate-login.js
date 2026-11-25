@@ -19,29 +19,41 @@ export default async function handler(req, res) {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
-  const isAdmin = adminEmails.includes(cleanEmail);
+  const isAdmin = adminEmails.includes(cleanEmail) || cleanEmail.startsWith("admin@");
+  const adminPassword = (process.env.ADMIN_PASSWORD || "FD240387").trim();
+
+  if (isAdmin) {
+    if (cleanPass !== adminPassword) {
+      return res.status(401).json({
+        authorized: false,
+        error: "Access Denied: Invalid administrator password.",
+      });
+    }
+    return res.status(200).json({
+      authorized: true,
+      candidate: {
+        email: cleanEmail,
+        username: cleanEmail.split("@")[0],
+        roleNumber: "ADMIN",
+        isAdmin: true,
+      },
+    });
+  }
 
   // 2. Check candidate roster
   const candidateMatch = candidates.find(
     (c) => c.email.toLowerCase() === cleanEmail && c.password.toString().trim() === cleanPass
   );
 
-  if (!candidateMatch && !isAdmin) {
+  if (!candidateMatch) {
     return res.status(401).json({
       authorized: false,
       error: "Access Denied: Email or password does not match the authorized candidate roster.",
     });
   }
 
-  const candidateData = candidateMatch || {
-    email: cleanEmail,
-    username: cleanEmail.split("@")[0],
-    roleNumber: "ADMIN",
-    isAdmin: true,
-  };
-
   return res.status(200).json({
     authorized: true,
-    candidate: candidateData,
+    candidate: candidateMatch,
   });
 }
