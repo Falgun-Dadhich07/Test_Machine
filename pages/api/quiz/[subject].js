@@ -13,9 +13,10 @@ export default async function handler(req, res) {
   const decodedSubject = decodeURIComponent(subject || "").trim();
 
   try {
-    let paper = null;
+    let localPaper = null;
+    let cloudPaper = null;
 
-    // 1. Check local data/active-quiz.json (Highest priority & fastest)
+    // 1. Read local data/active-quiz.json
     try {
       const activeQuizPath = path.join(process.cwd(), "data", "active-quiz.json");
       if (fs.existsSync(activeQuizPath)) {
@@ -27,26 +28,33 @@ export default async function handler(req, res) {
             fileContent.title?.toLowerCase() === decodedSubject.toLowerCase() ||
             fileContent.subject?.toLowerCase() === decodedSubject.toLowerCase())
         ) {
-          paper = fileContent;
+          localPaper = fileContent;
         }
       }
     } catch (e) {
       // file read note
     }
 
-    // 2. Try Firestore questionPapers collection
-    if (!paper && db) {
+    // 2. Read Cloud Firestore questionPapers ('active' doc first, then matching docId/subject, then newest)
+    if (db) {
       try {
-        const docId = decodedSubject.toLowerCase().replace(/[^a-z0-9]/g, "-");
-        const docSnap = await getDoc(doc(db, "questionPapers", docId));
-        if (docSnap.exists()) {
-          paper = docSnap.data();
+        const activeSnap = await getDoc(doc(db, "questionPapers", "active"));
+        if (activeSnap.exists() && activeSnap.data()?.questions?.length > 0) {
+          cloudPaper = activeSnap.data();
         }
-      } catch (e) {
-        // continue
+      } catch (e) {}
+
+      if (!cloudPaper && decodedSubject) {
+        try {
+          const docId = decodedSubject.toLowerCase().replace(/[^a-z0-9]/g, "-");
+          const docSnap = await getDoc(doc(db, "questionPapers", docId));
+          if (docSnap.exists() && docSnap.data()?.questions?.length > 0) {
+            cloudPaper = docSnap.data();
+          }
+        } catch (e) {}
       }
 
-      if (!paper) {
+      if (!cloudPaper && decodedSubject) {
         try {
           const q = query(
             collection(db, "questionPapers"),
@@ -54,15 +62,34 @@ export default async function handler(req, res) {
           );
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
-            paper = querySnapshot.docs[0].data();
+            cloudPaper = querySnapshot.docs[0].data();
           }
-        } catch (e) {
-          // continue
-        }
+        } catch (e) {}
+      }
+
+      if (!cloudPaper) {
+        try {
+          const allSnap = await getDocs(collection(db, "questionPapers"));
+          const papers = allSnap.docs.map((d) => d.data()).filter((p) => p?.questions?.length > 0);
+          papers.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+          if (papers.length > 0) {
+            cloudPaper = papers[0];
+          }
+        } catch (e) {}
       }
     }
 
-    // 3. Fallback to questionsData
+    // 3. Pick whichever paper is newer (ensures Vercel Cloud updates override bundled active-quiz.json)
+    let paper = null;
+    if (cloudPaper && localPaper) {
+      const cloudTime = new Date(cloudPaper.updatedAt || cloudPaper.createdAt || 0).getTime();
+      const localTime = new Date(localPaper.updatedAt || localPaper.createdAt || 0).getTime();
+      paper = cloudTime >= localTime ? cloudPaper : localPaper;
+    } else {
+      paper = cloudPaper || localPaper;
+    }
+
+    // 4. Fallback to static questionsData
     if (!paper) {
       const defaultKey = questionsData[decodedSubject]
         ? decodedSubject
@@ -97,8 +124,8 @@ export default async function handler(req, res) {
     });
 
     return res.status(200).json({
-      title: paper.title || "Examination",
-      subject: paper.subject || "Examination",
+      title: paper.title || "Winter Project Selection Test",
+      subject: paper.subject || "Winter Project Selection Test",
       duration: paper.duration || 60,
       instructions: paper.instructions || "This examination consists of 4 sections. Answer all questions.",
       totalQuestions: sanitizedQuestions.length,

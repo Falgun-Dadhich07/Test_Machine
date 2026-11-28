@@ -77,21 +77,48 @@ export default function Dashboard() {
     if (!currentUser) return;
 
     try {
+      const res = await fetch("/api/quiz/" + encodeURIComponent("Winter Project Selection Test"));
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.questions) {
+          setAvailableTests([
+            {
+              id: "active",
+              subject: data.subject || data.title || "Winter Project Selection Test",
+              title: data.title || "Winter Project Selection Test",
+              duration: data.duration || 60,
+              totalQuestions: data.totalQuestions || data.questions.length || 4,
+            },
+          ]);
+          return;
+        }
+      }
+    } catch (apiErr) {
+      console.warn("Active quiz API fetch note:", apiErr.message);
+    }
+
+    try {
       if (db) {
         const papersSnapshot = await getDocs(collection(db, "questionPapers"));
         const dynamicTests = [];
-        papersSnapshot.forEach((doc) => {
-          const data = doc.data();
+        papersSnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
           dynamicTests.push({
-            id: doc.id,
+            id: docSnap.id,
             subject: data.subject || data.title,
             title: data.title || data.subject,
             duration: data.duration || 60,
             totalQuestions: data.totalQuestions || data.questions?.length || 4,
+            updatedAt: data.updatedAt || data.createdAt || "",
           });
         });
 
         if (dynamicTests.length > 0) {
+          dynamicTests.sort((a, b) => {
+            if (a.id === "active") return -1;
+            if (b.id === "active") return 1;
+            return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+          });
           setAvailableTests(dynamicTests);
         }
       }

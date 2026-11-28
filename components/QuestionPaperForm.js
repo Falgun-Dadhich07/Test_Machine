@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -15,12 +15,21 @@ import {
 } from '@mui/joy';
 import { Save, Schedule, Description } from '@mui/icons-material';
 
-export default function QuestionPaperForm({ questions, onSave, loading }) {
+export default function QuestionPaperForm({ questions, initialDetails, onSave, loading }) {
   const [paperDetails, setPaperDetails] = useState({
     title: 'Winter Project Selection Test',
     duration: 60,
     instructions: 'This test contains 4 sections. Read each question carefully. Both Multiple Choice and Numerical Integer type questions are included.'
   });
+
+  useEffect(() => {
+    if (initialDetails) {
+      setPaperDetails((prev) => ({
+        ...prev,
+        ...initialDetails,
+      }));
+    }
+  }, [initialDetails]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

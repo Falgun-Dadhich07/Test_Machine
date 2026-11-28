@@ -90,31 +90,39 @@ export default async function handler(req, res) {
   }
 
   try {
-    let masterPaper = null;
+    let localPaper = null;
+    let cloudPaper = null;
 
     // 1. Check local data/active-quiz.json
     try {
       const activeQuizPath = path.join(process.cwd(), "data", "active-quiz.json");
       if (fs.existsSync(activeQuizPath)) {
-        masterPaper = JSON.parse(fs.readFileSync(activeQuizPath, "utf-8"));
+        localPaper = JSON.parse(fs.readFileSync(activeQuizPath, "utf-8"));
       }
     } catch (e) {
       // continue
     }
 
-    // 2. Try Firestore
-    if (!masterPaper && db) {
+    // 2. Check Cloud Firestore ('active' pointer first, then matching docId/subject, then newest)
+    if (db) {
       try {
-        const docId = (subject || "examination").toLowerCase().replace(/[^a-z0-9]/g, "-");
-        const docSnap = await getDoc(doc(db, "questionPapers", docId));
-        if (docSnap.exists()) {
-          masterPaper = docSnap.data();
+        const activeSnap = await getDoc(doc(db, "questionPapers", "active"));
+        if (activeSnap.exists() && activeSnap.data()?.questions?.length > 0) {
+          cloudPaper = activeSnap.data();
         }
-      } catch (e) {
-        // continue
+      } catch (e) {}
+
+      if (!cloudPaper) {
+        try {
+          const docId = (subject || "examination").toLowerCase().replace(/[^a-z0-9]/g, "-");
+          const docSnap = await getDoc(doc(db, "questionPapers", docId));
+          if (docSnap.exists() && docSnap.data()?.questions?.length > 0) {
+            cloudPaper = docSnap.data();
+          }
+        } catch (e) {}
       }
 
-      if (!masterPaper) {
+      if (!cloudPaper) {
         try {
           const q = query(
             collection(db, "questionPapers"),
@@ -122,12 +130,31 @@ export default async function handler(req, res) {
           );
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
-            masterPaper = querySnapshot.docs[0].data();
+            cloudPaper = querySnapshot.docs[0].data();
           }
-        } catch (e) {
-          // continue
-        }
+        } catch (e) {}
       }
+
+      if (!cloudPaper) {
+        try {
+          const allSnap = await getDocs(collection(db, "questionPapers"));
+          const papers = allSnap.docs.map((d) => d.data()).filter((p) => p?.questions?.length > 0);
+          papers.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+          if (papers.length > 0) {
+            cloudPaper = papers[0];
+          }
+        } catch (e) {}
+      }
+    }
+
+    // Pick whichever paper is newer (ensures Vercel Cloud updates override bundled active-quiz.json)
+    let masterPaper = null;
+    if (cloudPaper && localPaper) {
+      const cloudTime = new Date(cloudPaper.updatedAt || cloudPaper.createdAt || 0).getTime();
+      const localTime = new Date(localPaper.updatedAt || localPaper.createdAt || 0).getTime();
+      masterPaper = cloudTime >= localTime ? cloudPaper : localPaper;
+    } else {
+      masterPaper = cloudPaper || localPaper;
     }
 
     // 3. Fallback to questionsData

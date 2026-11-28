@@ -1,22 +1,25 @@
 import fs from "fs";
 import path from "path";
 import { db } from "../../../firebase-config";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { title = "Examination", duration = 60, instructions = "", questions = [] } = req.body;
+  const { title = "Winter Project Selection Test", duration = 60, instructions = "", questions = [] } = req.body || {};
 
   if (!questions || questions.length === 0) {
     return res.status(400).json({ error: "Cannot save an empty question paper" });
   }
 
+  const nowIso = new Date().toISOString();
+  const cleanTitle = (title || "Winter Project Selection Test").trim();
+
   const paperData = {
-    title: title.trim(),
-    subject: title.trim(),
+    title: cleanTitle,
+    subject: cleanTitle,
     duration: Number(duration) || 60,
     instructions: instructions || "Answer all questions. Each question carries equal marks.",
     totalQuestions: questions.length,
@@ -26,11 +29,12 @@ export default async function handler(req, res) {
       section: q.section || `Section ${Math.min(4, Math.floor(idx / Math.ceil(questions.length / 4)) + 1)}`,
       type: q.type || (q.options && q.options.length ? "mcq" : "integer"),
     })),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 
-  // 1. Save directly to local data/active-quiz.json on disk (Guaranteed persistence)
+  // 1. Try saving to local data/active-quiz.json (works locally; read-only on Vercel)
+  let localSaved = false;
   try {
     const dataDir = path.join(process.cwd(), "data");
     if (!fs.existsSync(dataDir)) {
@@ -38,27 +42,40 @@ export default async function handler(req, res) {
     }
     const quizFilePath = path.join(dataDir, "active-quiz.json");
     fs.writeFileSync(quizFilePath, JSON.stringify(paperData, null, 2), "utf-8");
+    localSaved = true;
   } catch (fsErr) {
-    console.warn("Could not save to active-quiz.json:", fsErr);
+    console.warn("Local active-quiz.json write note (expected on Vercel read-only FS):", fsErr.message);
   }
 
-  // 2. Also save to Firestore collection 'questionPapers'
+  // 2. Save to Cloud Firestore: both 'active' pointer doc AND titled doc
   let firestoreSaved = false;
+  let firestoreError = null;
   try {
     if (db) {
-      const docId = paperData.title.toLowerCase().replace(/[^a-z0-9]/g, "-") || "examination";
+      const docId = cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, "-") || "examination";
+      await setDoc(doc(db, "questionPapers", "active"), paperData);
       await setDoc(doc(db, "questionPapers", docId), paperData);
       firestoreSaved = true;
     }
   } catch (dbErr) {
-    console.warn("Firestore save note (saved locally on server):", dbErr.message);
+    firestoreError = dbErr.message;
+    console.warn("Firestore save note:", dbErr.message);
+  }
+
+  if (!localSaved && !firestoreSaved) {
+    return res.status(500).json({
+      success: false,
+      error: `Failed to save quiz to both cloud Firestore (${firestoreError || "unavailable"}) and server storage. Check Firebase Firestore Rules.`,
+    });
   }
 
   return res.status(200).json({
     success: true,
+    firestoreSaved,
+    localSaved,
     message: firestoreSaved
-      ? "Quiz successfully saved to both Firestore database and server storage!"
-      : "Quiz successfully saved to server storage (ready for examinees)!",
+      ? "Quiz successfully published and live for all candidates!"
+      : "Quiz saved to local server storage (note: Firestore write failed — check Firestore Rules for Vercel!).",
     paper: paperData,
   });
 }
