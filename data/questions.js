@@ -1,10 +1,10 @@
 export const subjects = ["Winter Project Selection Test"];
 
 export const sections = [
-  "Section 1: General Aptitude",
-  "Section 2: Core Concepts",
-  "Section 3: Analytical Problem Solving",
-  "Section 4: Numerical & Integer Type"
+  "Finance",
+  "Python",
+  "ML",
+  "Aptitude"
 ];
 
 const sharedQuestions = [

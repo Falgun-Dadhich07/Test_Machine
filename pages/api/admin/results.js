@@ -6,10 +6,10 @@ import { questionsData } from "../../../data/questions";
 
 function computeSectionScores(answers = {}, questions = []) {
   const sectionScores = {
-    0: { name: "Section 1", score: 0, total: 0 },
-    1: { name: "Section 2", score: 0, total: 0 },
-    2: { name: "Section 3", score: 0, total: 0 },
-    3: { name: "Section 4", score: 0, total: 0 },
+    0: { name: "Finance", score: 0, total: 0 },
+    1: { name: "Python", score: 0, total: 0 },
+    2: { name: "ML", score: 0, total: 0 },
+    3: { name: "Aptitude", score: 0, total: 0 },
   };
 
   if (!Array.isArray(questions) || questions.length === 0) {
@@ -25,9 +25,16 @@ function computeSectionScores(answers = {}, questions = []) {
     if (q.sectionIndex !== undefined && q.sectionIndex >= 0 && q.sectionIndex <= 3) {
       secIdx = q.sectionIndex;
     } else if (q.section) {
-      const match = q.section.match(/(\d)/);
-      if (match) {
-        secIdx = Math.max(0, Math.min(3, parseInt(match[1], 10) - 1));
+      const s = q.section.toString().toLowerCase();
+      if (s.includes("finance")) secIdx = 0;
+      else if (s.includes("python")) secIdx = 1;
+      else if (s === "ml" || s.includes("ml") || s.includes("machine learning")) secIdx = 2;
+      else if (s.includes("aptitude")) secIdx = 3;
+      else {
+        const match = s.match(/(\d)/);
+        if (match) {
+          secIdx = Math.max(0, Math.min(3, parseInt(match[1], 10) - 1));
+        }
       }
     } else {
       secIdx = Math.min(3, Math.floor(index / chunkSize));

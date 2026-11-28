@@ -42,10 +42,10 @@ export default function QuestionPaperForm({ questions, initialDetails, onSave, l
 
   // Calculate question count breakdown across 4 sections
   const secCounts = {
-    'Section 1': questions.filter(q => q.section === 'Section 1').length,
-    'Section 2': questions.filter(q => q.section === 'Section 2').length,
-    'Section 3': questions.filter(q => q.section === 'Section 3').length,
-    'Section 4': questions.filter(q => q.section === 'Section 4').length,
+    Finance: questions.filter(q => q.section === 'Finance' || q.section === 'Section 1').length,
+    Python: questions.filter(q => q.section === 'Python' || q.section === 'Section 2').length,
+    ML: questions.filter(q => q.section === 'ML' || q.section === 'Section 3').length,
+    Aptitude: questions.filter(q => q.section === 'Aptitude' || q.section === 'Section 4').length,
   };
 
   return (
@@ -90,10 +90,10 @@ export default function QuestionPaperForm({ questions, initialDetails, onSave, l
                 Section Breakdown ({questions.length} total questions):
               </Typography>
               <Box display="flex" flexWrap="wrap" gap={1}>
-                <Chip size="sm" variant="soft" color="primary">Sec 1: {secCounts['Section 1']}</Chip>
-                <Chip size="sm" variant="soft" color="primary">Sec 2: {secCounts['Section 2']}</Chip>
-                <Chip size="sm" variant="soft" color="primary">Sec 3: {secCounts['Section 3']}</Chip>
-                <Chip size="sm" variant="soft" color="primary">Sec 4: {secCounts['Section 4']}</Chip>
+                <Chip size="sm" variant="soft" color="primary">Finance: {secCounts.Finance}</Chip>
+                <Chip size="sm" variant="soft" color="primary">Python: {secCounts.Python}</Chip>
+                <Chip size="sm" variant="soft" color="primary">ML: {secCounts.ML}</Chip>
+                <Chip size="sm" variant="soft" color="primary">Aptitude: {secCounts.Aptitude}</Chip>
               </Box>
             </Box>
 

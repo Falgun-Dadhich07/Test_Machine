@@ -291,10 +291,10 @@ export default function AdminDashboard() {
     const headers = [
       'Student Email',
       'Subject',
-      'Section 1',
-      'Section 2',
-      'Section 3',
-      'Section 4',
+      'Finance',
+      'Python',
+      'ML',
+      'Aptitude',
       'Total Score',
       'Total Questions',
       'Percentage',
@@ -544,7 +544,7 @@ export default function AdminDashboard() {
                 <tr>
                   <th>Student</th>
                   <th>Test</th>
-                  <th>Section-Wise Score (S1 – S4)</th>
+                  <th>Section-Wise Score (Finance / Python / ML / Aptitude)</th>
                   <th>Total Score</th>
                   <th>Violations</th>
                   <th>Date</th>
@@ -589,7 +589,7 @@ export default function AdminDashboard() {
                         </td>
                         <td>
                           <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                            {[0, 1, 2, 3].map((idx) => (
+                            {['Finance', 'Python', 'ML', 'Aptitude'].map((label, idx) => (
                               <Chip
                                 key={idx}
                                 size="sm"
@@ -597,7 +597,7 @@ export default function AdminDashboard() {
                                 color="neutral"
                                 sx={{ fontSize: '0.72rem' }}
                               >
-                                S{idx + 1}: {formatSectionScore(sec[idx])}
+                                {label}: {formatSectionScore(sec[idx])}
                               </Chip>
                             ))}
                           </Stack>
@@ -722,7 +722,7 @@ export default function AdminDashboard() {
                   Section-Wise Breakdown
                 </Typography>
                 <Grid container spacing={1.5}>
-                  {[0, 1, 2, 3].map((idx) => {
+                  {['Finance', 'Python', 'ML', 'Aptitude'].map((label, idx) => {
                     const secData = selectedUser.sectionScores?.[idx];
                     return (
                       <Grid key={idx} xs={6} sm={3}>
@@ -731,7 +731,7 @@ export default function AdminDashboard() {
                           sx={{ p: 1.5, borderRadius: 'md', textAlign: 'center' }}
                         >
                           <Typography level="body-xs" color="neutral">
-                            Section {idx + 1}
+                            {label}
                           </Typography>
                           <Typography level="title-lg" fontWeight="bold" color="primary">
                             {formatSectionScore(secData)}

@@ -56,10 +56,10 @@ import {
 import { questionsData } from "../../data/questions";
 
 const SECTION_NAMES = [
-  "Section 1",
-  "Section 2",
-  "Section 3",
-  "Section 4",
+  "Finance",
+  "Python",
+  "ML",
+  "Aptitude",
 ];
 
 export default function ExamPage() {
@@ -217,9 +217,16 @@ export default function ExamPage() {
       if (q.sectionIndex !== undefined && q.sectionIndex >= 0 && q.sectionIndex <= 3) {
         secIdx = q.sectionIndex;
       } else if (q.section) {
-        const match = q.section.match(/(\d)/);
-        if (match) {
-          secIdx = Math.max(0, Math.min(3, parseInt(match[1], 10) - 1));
+        const s = q.section.toString().toLowerCase();
+        if (s.includes("finance")) secIdx = 0;
+        else if (s.includes("python")) secIdx = 1;
+        else if (s === "ml" || s.includes("ml") || s.includes("machine learning")) secIdx = 2;
+        else if (s.includes("aptitude")) secIdx = 3;
+        else {
+          const match = s.match(/(\d)/);
+          if (match) {
+            secIdx = Math.max(0, Math.min(3, parseInt(match[1], 10) - 1));
+          }
         }
       } else {
         secIdx = Math.min(3, Math.floor(idx / chunkSize));

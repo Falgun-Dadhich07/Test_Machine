@@ -17,7 +17,7 @@ export default function QuestionsList({ questions, onDeleteQuestion }) {
         <Card variant="soft" color="neutral">
           <CardContent sx={{ textAlign: "center", py: 4 }}>
             <Typography level="body1" color="neutral">
-              No questions added yet. Use the form on the left to add questions to Section 1, 2, 3, or 4.
+              No questions added yet. Use the form on the left to add questions to Finance, Python, ML, or Aptitude.
             </Typography>
           </CardContent>
         </Card>
@@ -35,7 +35,7 @@ export default function QuestionsList({ questions, onDeleteQuestion }) {
                     </Box>
                     <Stack direction="row" spacing={1}>
                       <Chip size="sm" variant="solid" color="primary">
-                        {q.section || "Section 1"}
+                        {q.section || "Finance"}
                       </Chip>
                       <Chip
                         size="sm"

@@ -21,7 +21,7 @@ import { Add, Delete, Numbers, ListAlt } from '@mui/icons-material';
 
 export default function QuestionForm({ onAddQuestion }) {
   const [questionType, setQuestionType] = useState('mcq'); // 'mcq' | 'integer'
-  const [section, setSection] = useState('Section 1');
+  const [section, setSection] = useState('Finance');
   const [questionText, setQuestionText] = useState('');
   const [image, setImage] = useState('');
   const [options, setOptions] = useState(['', '', '', '']);
@@ -108,10 +108,10 @@ export default function QuestionForm({ onAddQuestion }) {
                 value={section}
                 onChange={(e, value) => setSection(value)}
               >
-                <Option value="Section 1">Section 1</Option>
-                <Option value="Section 2">Section 2</Option>
-                <Option value="Section 3">Section 3</Option>
-                <Option value="Section 4">Section 4</Option>
+                <Option value="Finance">Finance (Section 1)</Option>
+                <Option value="Python">Python (Section 2)</Option>
+                <Option value="ML">ML (Section 3)</Option>
+                <Option value="Aptitude">Aptitude (Section 4)</Option>
               </Select>
             </FormControl>
 
